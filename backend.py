@@ -1,5 +1,5 @@
 import pyodbc
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException, Query
 import json
 import time
 from functools import lru_cache
@@ -70,6 +70,7 @@ nvl((select round(dep_scom) from mgdepo where dep_arti = amg_code and dep_code =
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 1) giac_d01,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 20) giac_d20,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 32) giac_d32,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 40) giac_d40,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 48) giac_d48,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 60) giac_d60,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 81) giac_d81,
@@ -546,4 +547,592 @@ async def get_deposit_totals():
     finally:
         if cursor is not None:
             cursor.close()
+
+
+@app.get("/top_article")
+async def get_top_article(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+    Get the top performant article within a specified date range.
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+SELECT
+    oc.occ_arti,
+    (m.amg_desc || ' ' || m.amg_des2) AS article_description,
+    mg.lne_desc AS categoria,
+    SUM(oc.occ_qmov) AS total_occ_qmov,
+    SUM(oc.occ_preu * oc.occ_qmov) AS total_soldi
+FROM
+    ocordic oc
+JOIN
+    ocordit ot ON oc.occ_tipo = ot.oct_tipo AND oc.occ_code = ot.oct_code
+JOIN
+    agagenti ag ON ot.oct_agen = ag.cod_agente
+JOIN
+    mganag m ON m.amg_code = oc.occ_arti
+JOIN 
+    mglinee mg ON m.amg_linp = mg.lne_code
+WHERE
+    oc.occ_dtco BETWEEN ? AND ?
+GROUP BY
+    oc.occ_arti,
+    mg.lne_desc,
+    m.amg_desc,
+    m.amg_des2
+ORDER BY 
+    total_occ_qmov DESC
+
+
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        
+        for row in rows:
+            results.append({
+                "occ_arti": row.occ_arti,
+                "article_description": row.article_description,
+                "total_occ_qmov": row.total_occ_qmov,
+                "categoria": row.categoria,
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+@app.get("/agents_total_sales")
+async def get_agents_total_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+    Get the total sold quantity by each agent within a specified date range.
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+        SELECT
+            ag.des_agente,
+            SUM(oc.occ_qmov) AS total_occ_qmov
+        FROM
+            ocordic oc
+        JOIN
+            ocordit ot ON oc.occ_tipo = ot.oct_tipo AND oc.occ_code = ot.oct_code
+        JOIN
+            agagenti ag ON ot.oct_agen = ag.cod_agente
+        WHERE
+            oc.occ_dtco BETWEEN ? AND ?
+        GROUP BY
+            ag.des_agente
+        ORDER BY 
+            total_occ_qmov DESC
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "des_agente": row.des_agente,
+                "total_occ_qmov": row.total_occ_qmov
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+@app.get("/agent_article_sales")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+    Track the total sold quantity for each article per agent within a specified date range.
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+        SELECT
+            ag.des_agente,
+            oc.occ_arti,
+            (m.amg_desc || ' ' || m.amg_des2) AS article_description,
+
+            SUM(oc.occ_qmov) AS total_occ_qmov
+        FROM
+            ocordic oc
+        JOIN
+            ocordit ot ON oc.occ_tipo = ot.oct_tipo AND oc.occ_code = ot.oct_code
+        JOIN
+            agagenti ag ON ot.oct_agen = ag.cod_agente
+        JOIN
+            mganag m ON m.amg_code = oc.occ_arti
+        WHERE
+            oc.occ_dtco BETWEEN ? AND ?
+        GROUP BY
+            ag.des_agente,
+            oc.occ_arti,
+                m.amg_desc,
+    m.amg_des2
+        ORDER BY 
+            ag.des_agente,
+            total_occ_qmov DESC
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "des_agente": row.des_agente,
+                "occ_arti": row.occ_arti,
+                "article_description": row.article_description,
+                "total_occ_qmov": row.total_occ_qmov
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+@app.get("/fatturato_clienti")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+/* Fatturato per cliente */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+    select  des_clifor, SUM(oct_impn) as total_soldi from ocordit JOIN
+            agclifor ag ON oct_cocl = ag.cod_clifor
+              WHERE
+    oct_data BETWEEN ? AND ? group by des_clifor order by total_soldi desc
+    
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "des_clifor": row.des_clifor,
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+@app.get("/fatturato_totale")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+/* Fatturato totale */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+select  SUM(oct_impn) as total_soldi from ocordit  JOIN
+            agagenti ag ON oct_agen = ag.cod_agente WHERE
+    oct_data BETWEEN ? AND ?
+    
+    
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+@app.get("/fatturato_per_agente")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+/* Fatturato per agente */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+select  ag.des_agente, SUM(oct_impn) as total_soldi from ocordit  JOIN
+            agagenti ag ON oct_agen = ag.cod_agente WHERE
+    oct_data BETWEEN ? AND ? group by des_agente
+    
+    
+    
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "des_agente": row.des_agente,
+
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+@app.get("/fatturato_per_mese")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+/* Fatturato per mese */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+SELECT 
+    YEAR(oct_data) AS year,
+    MONTH(oct_data) AS month,
+    SUM(oct_impn) AS total_soldi
+FROM 
+    ocordit 
+WHERE 
+    oct_data BETWEEN ? and ?
+GROUP BY 
+    1,2
+ORDER BY 
+    year, month;
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "year": row.year,
+                "month": row.month,
+
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+
+@app.get("/fatturato_per_giorno")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+/* Fatturato per giorno */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+
+SELECT 
+    oct_data,
+    SUM(oct_impn) AS total_soldi
+FROM 
+    ocordit 
+WHERE 
+    oct_data BETWEEN ? and ?
+GROUP BY 
+    oct_data
+ORDER BY 
+      oct_data
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "oct_data": row.oct_data,
+               
+
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+
+
+
+@app.get("/suppliers")
+async def suppliers(
+    
+):
+    """
+/* Fornitori */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+select * from agclifor where cli_for = "F"
+
+        """
+        
+        cursor.execute(query, )
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "cod_clifor": row.cod_clifor,
+            
+
+                "des_clifor": row.des_clifor
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+
+
+@app.get("/supplier-orders")
+async def supplier_orders(
+    codice: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    
+):
+    """
+/* Ordini fortniore*/
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+select * from ofordit where oft_cofo = ? order by oft_data desc
+
+
+        """
+        
+        cursor.execute(query, (codice))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "oft_data": row.oft_data
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+
+
+
+
+
+@app.get("/fatturato_per_anno")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+/* Fatturato per mese */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+SELECT 
+    YEAR(oct_data) AS year,
+    SUM(oct_impn) AS total_soldi
+FROM 
+    ocordit 
+WHERE 
+    oct_data BETWEEN ? and ?
+GROUP BY 
+    1
+ORDER BY 
+    year;
+
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "year": row.year,
+            
+
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+
+
+
 

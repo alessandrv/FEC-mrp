@@ -116,6 +116,7 @@ const ArticlesTable = () => {
             giac_d01: parseInt(item.giac_d01) || 0,
             giac_d20: parseInt(item.giac_d20) || 0,
             giac_d32: parseInt(item.giac_d32) || 0,
+            giac_d40: parseInt(item.giac_d40) || 0,
             giac_d48: parseInt(item.giac_d48) || 0,
             giac_d60: parseInt(item.giac_d60) || 0,
             giac_d81: parseInt(item.giac_d81) || 0,
@@ -645,6 +646,11 @@ const ArticlesTable = () => {
             title: "Dep. 32", // Customize for another field
             dataIndex: "giac_d32",
             key: "giac_d32",
+        },
+        {
+            title: "Dep. 40", // Customize for another field
+            dataIndex: "giac_d40",
+            key: "giac_d40",
         },
         {
             title: "Dep. 48", // Customize for another field
@@ -1206,6 +1212,7 @@ const ArticlesTable = () => {
             "Dep. 1": item.giac_d01,
             "Dep. 20": item.giac_d20,
             "Dep. 32": item.giac_d32,
+            "Dep. 40": item.giac_d40,
             "Dep. 48": item.giac_d48,
             "Dep. 60": item.giac_d60,
             "Dep. 81": item.giac_d81,

@@ -30,7 +30,7 @@ const RechartsLineChart = () => {
     }
 
     return (
-        <ResponsiveContainer width="100%" height={400}>
+        <ResponsiveContainer width="100%" height={200}>
             <LineChart
                 data={trendData}
                 margin={{
