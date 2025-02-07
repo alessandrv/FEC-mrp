@@ -94,7 +94,7 @@ const ArticlesTable = () => {
 
     // Initialize WebSocket connection at the top level of the component
     useWebSocket(
-        'ws://172.16.16.69:8000/ws/articles',
+        'ws://172.16.16.66:8000/ws/articles',
         handleWebSocketMessage,
         () => console.log('WebSocket connection opened.'),
         () => console.log('WebSocket connection closed.'),
@@ -166,7 +166,7 @@ const ArticlesTable = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/articles");
+                const response = await axios.get("http://172.16.16.66:8000/articles");
                 let fetchedData = parseIntegerData(response.data);
 
                 // Sort the data based on 'c_articolo'
@@ -197,7 +197,7 @@ const ArticlesTable = () => {
     const fetchOrderHistoryData = async (articleCode) => {
         try {
             // Fetch data from the backend
-            const response = await axios.get("http://172.16.16.69:8000/article_history", {
+            const response = await axios.get("http://172.16.16.66:8000/article_history", {
                 params: { article_code: articleCode },
             });
 
@@ -347,7 +347,7 @@ const ArticlesTable = () => {
 
             console.time('API call time');
             // Fetch processed data from the backend
-            const response = await axios.get("http://172.16.16.69:8000/article_price", {
+            const response = await axios.get("http://172.16.16.66:8000/article_price", {
                 params: { article_code: articleCode },
             });
             console.timeEnd('API call time');
@@ -1329,7 +1329,7 @@ const ArticlesTable = () => {
 
     const fetchTodayOrdersData = async () => {
         try {
-            const response = await axios.get("http://172.16.16.69:8000/today_orders");
+            const response = await axios.get("http://172.16.16.66:8000/today_orders");
             const fetchedData = response.data;
 
             if (!Array.isArray(fetchedData) || fetchedData.length === 0) {
