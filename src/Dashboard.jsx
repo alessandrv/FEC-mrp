@@ -60,7 +60,7 @@ const Dashboard = () => {
     useEffect(() => {
         const fetchTopArticle = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/top_article", {
+                const response = await axios.get("http://172.16.16.27:8000/top_article", {
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
@@ -75,7 +75,7 @@ const Dashboard = () => {
 
         const fetchAgentsTotalSales = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/agents_total_sales", {
+                const response = await axios.get("http://172.16.16.27:8000/agents_total_sales", {
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
@@ -94,7 +94,7 @@ const Dashboard = () => {
         };
         const fetchAgentsTotalValue = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/fatturato_per_agente", {
+                const response = await axios.get("http://172.16.16.27:8000/fatturato_per_agente", {
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
@@ -113,7 +113,7 @@ const Dashboard = () => {
         };
         const fetchTotalFatturato = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/fatturato_totale", {
+                const response = await axios.get("http://172.16.16.27:8000/fatturato_totale", {
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
@@ -129,7 +129,7 @@ const Dashboard = () => {
         };
         const fetchDepositTotals = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/deposit_totals");
+                const response = await axios.get("http://172.16.16.27:8000/deposit_totals");
                 setDepositTotals(response.data);
             } catch (error) {
                 message.error("Failed to fetch deposit totals.");
@@ -138,7 +138,7 @@ const Dashboard = () => {
         };
         const fetchInventoryDistribution = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/inventory_distribution");
+                const response = await axios.get("http://172.16.16.27:8000/inventory_distribution");
                 setInventoryDistribution(response.data);
             } catch (error) {
                 message.error("Failed to fetch inventory distribution.");
@@ -147,7 +147,7 @@ const Dashboard = () => {
         };
         const fetchAgentArticleSales = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/agent_article_sales", {
+                const response = await axios.get("http://172.16.16.27:8000/agent_article_sales", {
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
@@ -162,7 +162,7 @@ const Dashboard = () => {
 
         const fetchArticlesWithDescription = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/top_article", { // Corrected endpoint
+                const response = await axios.get("http://172.16.16.27:8000/top_article", { // Corrected endpoint
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
@@ -177,7 +177,7 @@ const Dashboard = () => {
 
         const fetchLowStockCount = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/low_stock_count"); // Ensure this endpoint exists
+                const response = await axios.get("http://172.16.16.27:8000/low_stock_count"); // Ensure this endpoint exists
                 setLowStockCount(response.data.count);
             } catch (error) {
                 message.error("Failed to fetch low stock count.");
@@ -187,7 +187,7 @@ const Dashboard = () => {
 
         const fetchUnderstockItems = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/understock_items"); // Ensure this endpoint exists
+                const response = await axios.get("http://172.16.16.27:8000/understock_items"); // Ensure this endpoint exists
                 setUnderstockItems(response.data);
             } catch (error) {
                 message.error("Failed to fetch understock items.");
@@ -197,7 +197,7 @@ const Dashboard = () => {
 
         const fetchSuppliers = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/suppliers", {
+                const response = await axios.get("http://172.16.16.27:8000/suppliers", {
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
@@ -274,7 +274,7 @@ const Dashboard = () => {
 
     // Initialize WebSocket connection
     useWebSocket(
-        "ws://172.16.16.69:8000/ws/articles", // Ensure this WebSocket endpoint exists and sends appropriate data
+        "ws://172.16.16.27:8000/ws/articles", // Ensure this WebSocket endpoint exists and sends appropriate data
         handleWebSocketMessage,
         () => console.log("WebSocket connection opened."),
         () => console.log("WebSocket connection closed."),
