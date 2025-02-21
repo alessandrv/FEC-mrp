@@ -30,7 +30,7 @@ const FatturatoPerMeseChart = () => {
             const start_date = formatDate(viewMode === "yearly" ? dateRange[0].startOf("year") : dateRange[0]);
             const end_date = formatDate(viewMode === "yearly" ? dateRange[1].endOf("year") : dateRange[1]);
 
-            const response = await axios.get(`http://172.16.16.69:8000/${endpoint}`, {
+            const response = await axios.get(`http://172.16.16.27:8000/${endpoint}`, {
                 params: { start_date, end_date },
             });
 

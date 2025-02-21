@@ -24,7 +24,7 @@ const SupplierOrdersModal = ({ visible, onClose, codice, ragioneSociale }) => {
     const fetchOrders = async () => {
         setLoading(true);
         try {
-            const response = await axios.get("http://172.16.16.69:8000/supplier-orders", {
+            const response = await axios.get("http://172.16.16.27:8000/supplier-orders", {
                 params: {
                     codice: codice
                 }

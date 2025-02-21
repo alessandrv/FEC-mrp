@@ -12,7 +12,7 @@ const RechartsLineChart = () => {
     useEffect(() => {
         const fetchTrendData = async () => {
             try {
-                const response = await axios.get("http://172.16.16.69:8000/stock_trends");
+                const response = await axios.get("http://172.16.16.27:8000/stock_trends");
                 setTrendData(response.data);
             } catch (error) {
                 message.error("Failed to fetch stock trends.");

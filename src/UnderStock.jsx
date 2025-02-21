@@ -242,7 +242,7 @@ const ArticlesTable = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await axios.get("http://172.16.16.69:8000/articles");
+        const response = await axios.get("http://172.16.16.27:8000/articles");
         let fetchedData = parseIntegerData(response.data);
 
         // Sort the data based on 'c_articolo'
@@ -281,7 +281,7 @@ const ArticlesTable = () => {
   const fetchOrderHistoryData = async (articleCode) => {
     try {
       // Fetch data from the backend
-      const response = await axios.get("http://172.16.16.69:8000/article_history", {
+      const response = await axios.get("http://172.16.16.27:8000/article_history", {
         params: { article_code: articleCode },
       });
 
@@ -338,7 +338,7 @@ const ArticlesTable = () => {
 
       console.time('API call time');
       // Fetch processed data from the backend
-      const response = await axios.get("http://172.16.16.69:8000/article_price", {
+      const response = await axios.get("http://172.16.16.27:8000/article_price", {
         params: { article_code: articleCode },
       });
       console.timeEnd('API call time');

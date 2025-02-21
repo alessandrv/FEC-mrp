@@ -48,7 +48,7 @@ const SuppliersTable = ({ dateRange }) => {
         const fetchSuppliers = async () => {
             setLoading(true);
             try {
-                const response = await axios.get("http://172.16.16.69:8000/suppliers", {
+                const response = await axios.get("http://172.16.16.27:8000/suppliers", {
                     params: {
                         start_date: dateRange[0].format('DD-MM-YYYY'),
                         end_date: dateRange[1].format('DD-MM-YYYY')
