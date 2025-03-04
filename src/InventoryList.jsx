@@ -637,11 +637,11 @@ const ArticlesTable = () => {
             dataIndex: "giac_d01",
             key: "giac_d01",
         },
-        {
-            title: "Dep. 20", // Customize for another field
-            dataIndex: "giac_d20",
-            key: "giac_d20",
-        },
+        //{
+        //    title: "Dep. 20", // Customize for another field
+        //    dataIndex: "giac_d20",
+        //    key: "giac_d20",
+        //},
         {
             title: "Dep. 32", // Customize for another field
             dataIndex: "giac_d32",
