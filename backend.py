@@ -14,11 +14,12 @@ app = FastAPI()
 # Configure CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://172.16.16.66:3000", "http://172.16.16.66:8000"],
+    allow_origins=["http://localhost:3000","https://fecpos.it", "http://172.16.16.66:3000", "http://172.16.16.66:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 def get_connection():
     conn = pyodbc.connect(
@@ -1274,6 +1275,53 @@ async def get_article_disponibilita(article_code: str):
     finally:
         if cursor is not None:
             cursor.close()
+
+
+
+@app.get("/get_disponibilita_articoli")
+async def get_article_disponibilita():
+    """
+    Retrieves the availability data for a specific article code.
+    """
+    start_time = time.time()
+    cursor = None  # Initialize cursor to None
+    try:
+        conn = get_cached_connection()
+        cursor = conn.cursor()
+        
+        # Prepare the query
+        query = '''select * from products_availability'''
+        
+        # Execute the query with the article code parameter
+        cursor.execute(query,)        
+        # Fetch all results
+        rows = cursor.fetchall()
+        
+        # Check if any rows were returned
+        if not rows:
+            return JSONResponse(
+                content={"message": "Article not found."},
+                status_code=404
+            )
+        
+        # Convert the results to a list of dictionaries
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in rows]
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time: {total_time} seconds")
+        
+        # Return the results as JSON
+        return JSONResponse(content=jsonable_encoder(results))
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+
 
 
 
