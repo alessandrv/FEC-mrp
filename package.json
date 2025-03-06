@@ -36,7 +36,7 @@
   "scripts": {
     "start": "concurrently \"npm run start-react\" \"npm run start-backend\"",
     "start-react": "react-scripts start",
-    "start-backend": "C:\\Users\\APiccin\\AppData\\Local\\Programs\\Python\\Python312-32\\python.exe -m uvicorn backend:app --host 0.0.0.0 --reload",
+    "start-backend": "C:\\Users\\APiccin\\AppData\\Local\\Programs\\Python\\Python312-32\\python.exe -m uvicorn backend:app --host 0.0.0.0 --reload --port 8000",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
