@@ -1248,8 +1248,7 @@ select * from ofordit where oft_cofo = ? order by oft_data desc
 
 
 
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException, Query
-    allow_origins=["http://localhost:3000","https://fecpos.it", "http://172.16.16.66:3000", "http://172.16.16.66:8000"],
+
 @app.get("/fatturato_per_anno")
 async def get_agent_article_sales(
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
