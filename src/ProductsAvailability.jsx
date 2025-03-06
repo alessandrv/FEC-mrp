@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Space, message, Card, Tooltip } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, DragOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, PlusOutlined, DragOutlined, SearchOutlined } from '@ant-design/icons';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -12,6 +12,7 @@ const ProductsAvailability = () => {
   // State for products data
   const [dataSource, setDataSource] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingDescription, setLoadingDescription] = useState(false);
   
   // State for modal visibility and form
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -108,6 +109,44 @@ const ProductsAvailability = () => {
   const handleCancel = () => {
     setIsModalVisible(false);
     setIsDeleteModalVisible(false);
+  };
+
+  // Function to fetch description based on code
+  const fetchDescription = async () => {
+    let code = form.getFieldValue('codice');
+    if (!code) {
+      message.warning('Inserisci un codice prima di cercare la descrizione');
+      return;
+    }
+
+    // If there are multiple codes separated by commas, use only the first one
+    if (code.includes(',')) {
+      code = code.split(',')[0].trim();
+      message.info(`Utilizzando il primo codice: ${code}`);
+    }
+
+    setLoadingDescription(true);
+    try {
+      const response = await axios.get(`http://172.16.16.27:8000/get_article_description/${code}`);
+      
+      if (response.data && response.data.description) {
+        form.setFieldsValue({
+          descrizione: response.data.description
+        });
+        message.success('Descrizione trovata e applicata');
+      } else {
+        message.warning('Nessuna descrizione trovata per questo codice');
+      }
+    } catch (error) {
+      console.error('Error fetching description:', error);
+      if (error.response && error.response.status === 404) {
+        message.warning(`Nessuna descrizione trovata per il codice: ${code}`);
+      } else {
+        message.error('Errore durante il recupero della descrizione');
+      }
+    } finally {
+      setLoadingDescription(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -422,7 +461,7 @@ const ProductsAvailability = () => {
               label="Posizione"
               rules={[{ required: true, message: 'Inserisci la posizione' }]}
             >
-              <Input type="number" min={1} disabled />
+              <Input type="number" min={1} />
             </Form.Item>
             
             <Form.Item
@@ -439,7 +478,18 @@ const ProductsAvailability = () => {
               label="Descrizione"
               rules={[{ required: true, message: 'Inserisci la descrizione' }]}
             >
-              <Input />
+              <Input addonAfter={
+                <Button 
+                  size="small" 
+                  onClick={fetchDescription} 
+                  title="Cerca descrizione dal codice"
+                  icon={<SearchOutlined />}
+                  loading={loadingDescription}
+                  disabled={loadingDescription}
+                >
+                  Cerca
+                </Button>
+              } />
             </Form.Item>
           </Form>
         </Modal>

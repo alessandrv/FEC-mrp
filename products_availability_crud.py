@@ -459,4 +459,57 @@ async def update_product_availability_order(request: Request):
         raise HTTPException(status_code=500, detail="Internal Server Error")
     finally:
         if cursor is not None:
+            cursor.close()
+
+# Get description for an article code
+@router.get("/get_article_description/{code}")
+async def get_article_description(code: str):
+    """
+    Retrieves the description for an article code from the mganag table
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Prepare the query
+        query = '''
+            SELECT amg_desc, amg_des2 
+            FROM mganag 
+            WHERE amg_code = ?
+        '''
+        
+        # Execute the query
+        cursor.execute(query, (code,))
+        
+        # Fetch the result
+        row = cursor.fetchone()
+        
+        # Check if any row was returned
+        if not row:
+            return JSONResponse(
+                content={"message": f"No description found for code: {code}"},
+                status_code=404
+            )
+        
+        # Extract and concatenate the descriptions
+        desc = row[0].strip() if row[0] else ""
+        des2 = row[1].strip() if row[1] else ""
+        full_description = f"{desc} {des2}".strip()
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time for get_article_description: {total_time} seconds")
+        
+        # Return the result as JSON
+        return JSONResponse(
+            content={"description": full_description},
+            status_code=200
+        )
+        
+    except Exception as e:
+        print(f"Error getting article description: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
             cursor.close() 
