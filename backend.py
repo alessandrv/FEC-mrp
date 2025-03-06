@@ -1,5 +1,5 @@
 import pyodbc
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException, Query, Request
 import json
 import time
 from functools import lru_cache
@@ -9,12 +9,18 @@ from fastapi.encoders import jsonable_encoder
 from typing import List
 import asyncio
 
+# Import products availability CRUD router
+import products_availability_crud
+
 app = FastAPI()
+
+# Add products availability CRUD router
+app.include_router(products_availability_crud.router)
 
 # Configure CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000","https://fecpos.it", "http://172.16.16.66:3000", "http://172.16.16.66:8000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -550,7 +556,12 @@ from fastapi import BackgroundTasks
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(broadcast_articles_periodically())
+    # Create products_availability table if it doesn't exist
+
 async def broadcast_articles_periodically():
+    """
+    Broadcast articles periodically to connected WebSocket clients.
+    """
     while True:
         cursor = None  # Initialize cursor to None
         try:
@@ -581,7 +592,72 @@ async def broadcast_articles_periodically():
         # Wait for a specified interval before the next update
         await asyncio.sleep(30)  # Broadcast every 30 seconds
 
-
+def create_products_availability_table():
+    """
+    Create the products_availability table if it doesn't exist
+    """
+    cursor = None
+    try:
+        conn = get_cached_connection()
+        cursor = conn.cursor()
+        
+        # Check if the table exists
+        cursor.execute('''
+            SELECT COUNT(*) FROM information_schema.tables 
+            WHERE table_schema = 'public' AND table_name = 'products_availability'
+        ''')
+        
+        table_exists = cursor.fetchone()[0] > 0
+        
+        if not table_exists:
+            print("Creating products_availability table...")
+            # Create the table
+            cursor.execute('''
+                CREATE TABLE products_availability (
+                    posizione INTEGER PRIMARY KEY,
+                    codice VARCHAR(255) NOT NULL,
+                    descrizione VARCHAR(255) NOT NULL
+                )
+            ''')
+            
+            # Insert sample data if needed
+            sample_data = [
+                {"posizione":1,"codice":"0P9GA0FI","descrizione":"PP9735 SINGLE HINGE STAND"},
+                {"posizione":2,"codice":"0P9GA1FI","descrizione":"PP9735W SINGLE HINGE STAND"},
+                {"posizione":3,"codice":"0P9EF6FI","descrizione":"PP9732W NO STAND"},
+                {"posizione":4,"codice":"0P9ET1FI","descrizione":"PP9715 DUAL HINGE STAND"},
+                {"posizione":5,"codice":"14886751","descrizione":"CORE I3 9100T FOR PP9715"},
+                {"posizione":6,"codice":"14886771","descrizione":"CORE I5 9500TE FOR PP9715"},
+                {"posizione":7,"codice":"0P9EG2FI","descrizione":"PP9745W SINGLE HINGE STAND"},
+                {"posizione":8,"codice":"0P9EQ3FI","descrizione":"XPOS PLUS 15,6 XP-3765W"},
+                {"posizione":9,"codice":"0P9EG1FI","descrizione":"PP9742W NO STAND"},
+                {"posizione":10,"codice":"14887030,14887031","descrizione":"CORE I3 12100 FOR PP9745W/9742W/XPOS PLUS 15,6"},
+                {"posizione":11,"codice":"14887020,14887021","descrizione":"CORE I5 12400 FOR PP9745W/9742W and XPOS PLUS 15,6"},
+                {"posizione":12,"codice":"0ST900SB","descrizione":"TP100 PRINTER USB-LAN-COM"},
+                {"posizione":13,"codice":"0MN858FI","descrizione":"MONITOR 15\" AM1015CL"},
+                {"posizione":14,"codice":"0MN860FI","descrizione":"MONITOR 22\" LD9022W"},
+                {"posizione":15,"codice":"0MN872FI","descrizione":"MONITOR 15\" AM1015CL"},
+                {"posizione":16,"codice":"0MN873FI","descrizione":"MONITOR 15\" XM-3015-AD"}
+            ]
+            
+            insert_query = '''
+                INSERT INTO products_availability (posizione, codice, descrizione)
+                VALUES (?, ?, ?)
+            '''
+            
+            for item in sample_data:
+                cursor.execute(insert_query, (item["posizione"], item["codice"], item["descrizione"]))
+                
+            conn.commit()
+            print("products_availability table created with sample data")
+        else:
+            print("products_availability table already exists")
+            
+    except Exception as e:
+        print(f"Error creating products_availability table: {e}")
+    finally:
+        if cursor is not None:
+            cursor.close()
 
 @app.get("/today_orders")
 async def get_today_orders():
@@ -1166,160 +1242,6 @@ select * from ofordit where oft_cofo = ? order by oft_data desc
         if cursor:
             cursor.close()
         print(f"Total execution time: {time.time() - start_time} seconds")
-
-
-
-
-
-
-
-@app.get("/fatturato_per_anno")
-async def get_agent_article_sales(
-    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
-    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
-):
-    """
-/* Fatturato per mese */
-    """
-    start_time = time.time()
-    cursor = None
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        query = """
-SELECT 
-    YEAR(oct_data) AS year,
-    SUM(oct_impn) AS total_soldi
-FROM 
-    ocordit 
-WHERE 
-    oct_data BETWEEN ? and ?
-GROUP BY 
-    1
-ORDER BY 
-    year;
-
-        """
-        
-        cursor.execute(query, (start_date, end_date))
-        rows = cursor.fetchall()
-        
-        results = []
-        for row in rows:
-            results.append({
-                "year": row.year,
-            
-
-                "total_soldi": row.total_soldi
-            })
-        
-        json_content = json.dumps(results, default=str)
-        return Response(content=json_content, media_type="application/json")
-    
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-    
-    finally:
-        if cursor:
-            cursor.close()
-        print(f"Total execution time: {time.time() - start_time} seconds")
-
-
-
-
-
-
-
-@app.get("/article_disponibilita")
-async def get_article_disponibilita(article_code: str):
-    """
-    Retrieves the availability data for a specific article code.
-    """
-    start_time = time.time()
-    cursor = None  # Initialize cursor to None
-    try:
-        conn = get_cached_connection()
-        cursor = conn.cursor()
-        
-        # Prepare the query
-        query = get_disponibilita_query()
-        
-        # Execute the query with the article code parameter
-        cursor.execute(query, (article_code,))
-        
-        # Fetch all results
-        rows = cursor.fetchall()
-        
-        # Check if any rows were returned
-        if not rows:
-            return JSONResponse(
-                content={"message": "Article not found."},
-                status_code=404
-            )
-        
-        # Convert the results to a list of dictionaries
-        columns = [column[0] for column in cursor.description]
-        results = [dict(zip(columns, row)) for row in rows]
-        
-        total_time = time.time() - start_time
-        print(f"Total execution time: {total_time} seconds")
-        
-        # Return the results as JSON
-        return JSONResponse(content=jsonable_encoder(results))
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-    finally:
-        if cursor is not None:
-            cursor.close()
-
-
-
-@app.get("/get_disponibilita_articoli")
-async def get_article_disponibilita():
-    """
-    Retrieves the availability data for a specific article code.
-    """
-    start_time = time.time()
-    cursor = None  # Initialize cursor to None
-    try:
-        conn = get_cached_connection()
-        cursor = conn.cursor()
-        
-        # Prepare the query
-        query = '''select * from products_availability'''
-        
-        # Execute the query with the article code parameter
-        cursor.execute(query,)        
-        # Fetch all results
-        rows = cursor.fetchall()
-        
-        # Check if any rows were returned
-        if not rows:
-            return JSONResponse(
-                content={"message": "Article not found."},
-                status_code=404
-            )
-        
-        # Convert the results to a list of dictionaries
-        columns = [column[0] for column in cursor.description]
-        results = [dict(zip(columns, row)) for row in rows]
-        
-        total_time = time.time() - start_time
-        print(f"Total execution time: {total_time} seconds")
-        
-        # Return the results as JSON
-        return JSONResponse(content=jsonable_encoder(results))
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-    finally:
-        if cursor is not None:
-            cursor.close()
 
 
 

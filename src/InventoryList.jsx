@@ -641,7 +641,7 @@ const ArticlesTable = () => {
         //    title: "Dep. 20", // Customize for another field
         //    dataIndex: "giac_d20",
         //    key: "giac_d20",
-        //},
+      //},
         {
             title: "Dep. 32", // Customize for another field
             dataIndex: "giac_d32",
@@ -663,7 +663,7 @@ const ArticlesTable = () => {
             key: "giac_d60",
         },
         {
-            title: "Dep. 81", // Customize for another field
+            tle: "Dep. 81", // Customize for another field
             dataIndex: "giac_d81",
             key: "giac_d81",
         },
