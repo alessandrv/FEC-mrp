@@ -1248,5 +1248,153 @@ select * from ofordit where oft_cofo = ? order by oft_data desc
 
 
 
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException, Query
+    allow_origins=["http://localhost:3000","https://fecpos.it", "http://172.16.16.66:3000", "http://172.16.16.66:8000"],
+@app.get("/fatturato_per_anno")
+async def get_agent_article_sales(
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format")
+):
+    """
+/* Fatturato per mese */
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+SELECT 
+    YEAR(oct_data) AS year,
+    SUM(oct_impn) AS total_soldi
+FROM 
+    ocordit 
+WHERE 
+    oct_data BETWEEN ? and ?
+GROUP BY 
+    1
+ORDER BY 
+    year;
 
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "year": row.year,
+            
+
+                "total_soldi": row.total_soldi
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+
+
+
+
+
+@app.get("/article_disponibilita")
+async def get_article_disponibilita(article_code: str):
+    """
+    Retrieves the availability data for a specific article code.
+    """
+    start_time = time.time()
+    cursor = None  # Initialize cursor to None
+    try:
+        conn = get_cached_connection()
+        cursor = conn.cursor()
+        
+        # Prepare the query
+        query = get_disponibilita_query()
+        
+        # Execute the query with the article code parameter
+        cursor.execute(query, (article_code,))
+        
+        # Fetch all results
+        rows = cursor.fetchall()
+        
+        # Check if any rows were returned
+        if not rows:
+            return JSONResponse(
+                content={"message": "Article not found."},
+                status_code=404
+            )
+        
+        # Convert the results to a list of dictionaries
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in rows]
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time: {total_time} seconds")
+        
+        # Return the results as JSON
+        return JSONResponse(content=jsonable_encoder(results))
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+
+
+@app.get("/get_disponibilita_articoli")
+async def get_article_disponibilita():
+    """
+    Retrieves the availability data for a specific article code.
+    """
+    start_time = time.time()
+    cursor = None  # Initialize cursor to None
+    try:
+        conn = get_cached_connection()
+        cursor = conn.cursor()
+        
+        # Prepare the query
+        query = '''select * from products_availability'''
+        
+        # Execute the query with the article code parameter
+        cursor.execute(query,)        
+        # Fetch all results
+        rows = cursor.fetchall()
+        
+        # Check if any rows were returned
+        if not rows:
+            return JSONResponse(
+                content={"message": "Article not found."},
+                status_code=404
+            )
+        
+        # Convert the results to a list of dictionaries
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in rows]
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time: {total_time} seconds")
+        
+        # Return the results as JSON
+        return JSONResponse(content=jsonable_encoder(results))
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
 
