@@ -39,7 +39,7 @@ const ProductsAvailability = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://172.16.16.66:8000/get_disponibilita_articoli');
+      const response = await axios.get('http://172.16.16.27:8000/get_disponibilita_articoli');
       setDataSource(response.data);
       setLoading(false);
     } catch (error) {
@@ -54,7 +54,7 @@ const ProductsAvailability = () => {
   const saveData = async (itemA, itemB) => {
     try {
       // Send only the two items to swap positions
-      const response = await axios.put('http://172.16.16.66:8000/update_disponibilita_articoli_order', [itemA, itemB]);
+      const response = await axios.put('http://172.16.16.27:8000/update_disponibilita_articoli_order', [itemA, itemB]);
       
       // Fetch the updated data to ensure UI is in sync with backend
       fetchData();
@@ -119,7 +119,7 @@ const ProductsAvailability = () => {
       if (editingRecord) {
         // Update existing record via API
         try {
-          await axios.put('http://172.16.16.66:8000/update_disponibilita_articolo', values);
+          await axios.put('http://172.16.16.27:8000/update_disponibilita_articolo', values);
           
           // Update local state
           newData = newData.map(item => 
@@ -135,7 +135,7 @@ const ProductsAvailability = () => {
       } else {
         // Add new record via API
         try {
-          await axios.post('http://172.16.16.66:8000/add_disponibilita_articolo', values);
+          await axios.post('http://172.16.16.27:8000/add_disponibilita_articolo', values);
           
           // Add to local state
           newData.push(values);
@@ -167,7 +167,7 @@ const ProductsAvailability = () => {
     if (selectedRowForDelete) {
       try {
         // Delete record via API
-        await axios.delete(`http://172.16.16.66:8000/delete_disponibilita_articolo/${selectedRowForDelete.posizione}`);
+        await axios.delete(`http://172.16.16.27:8000/delete_disponibilita_articolo/${selectedRowForDelete.posizione}`);
         
         // Update local state
         const newData = dataSource.filter(
