@@ -40,7 +40,7 @@ const ProductsAvailability = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://172.16.16.27:8000/get_disponibilita_articoli');
+      const response = await axios.get('https://api.fecitalia.it/get_disponibilita_articoli');
       setDataSource(response.data);
       setLoading(false);
     } catch (error) {
@@ -55,7 +55,7 @@ const ProductsAvailability = () => {
   const saveData = async (itemA, itemB) => {
     try {
       // Send only the two items to swap positions
-      const response = await axios.put('http://172.16.16.27:8000/update_disponibilita_articoli_order', [itemA, itemB]);
+      const response = await axios.put('https://api.fecitalia.it/update_disponibilita_articoli_order', [itemA, itemB]);
       
       // Fetch the updated data to ensure UI is in sync with backend
       fetchData();
@@ -127,7 +127,7 @@ const ProductsAvailability = () => {
 
     setLoadingDescription(true);
     try {
-      const response = await axios.get(`http://172.16.16.27:8000/get_article_description/${code}`);
+      const response = await axios.get(`https://api.fecitalia.it/get_article_description/${code}`);
       
       if (response.data && response.data.description) {
         form.setFieldsValue({
@@ -158,7 +158,7 @@ const ProductsAvailability = () => {
       if (editingRecord) {
         // Update existing record via API
         try {
-          await axios.put('http://172.16.16.27:8000/update_disponibilita_articolo', values);
+          await axios.put('https://api.fecitalia.it/update_disponibilita_articolo', values);
           
           // Update local state
           newData = newData.map(item => 
@@ -174,7 +174,7 @@ const ProductsAvailability = () => {
       } else {
         // Add new record via API
         try {
-          await axios.post('http://172.16.16.27:8000/add_disponibilita_articolo', values);
+          await axios.post('https://api.fecitalia.it/add_disponibilita_articolo', values);
           
           // Add to local state
           newData.push(values);
@@ -206,7 +206,7 @@ const ProductsAvailability = () => {
     if (selectedRowForDelete) {
       try {
         // Delete record via API
-        await axios.delete(`http://172.16.16.27:8000/delete_disponibilita_articolo/${selectedRowForDelete.posizione}`);
+        await axios.delete(`https://api.fecitalia.it/delete_disponibilita_articolo/${selectedRowForDelete.posizione}`);
         
         // Update local state
         const newData = dataSource.filter(
