@@ -251,8 +251,6 @@ from mganag, mppoli
 where amg_code = amp_code and amp_depo = 1
 and  amg_stat = 'D' 
 and nvl(amg_fagi,'S') = 'S'
-and amg_code in (select dep_arti from mgdepo where dep_code in (1,20,32,48,60,81)
-and dep_qgiai+dep_qcar-dep_qsca+dep_qord+dep_qorp+dep_qpre+dep_qprp <> 0)
     """
 
 def get_article_price_query():

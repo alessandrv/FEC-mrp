@@ -37,9 +37,7 @@ const ArticlesTable = () => {
     const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
     const [currentRow, setCurrentRow] = useState(null);
     // Add this line with your other useState hooks
-    const [hideZeroRows, setHideZeroRows] = useState(false);
-    // Add new state for zero value filtering
-    const [hideZeroValueRows, setHideZeroValueRows] = useState(true);
+    const [hideZeroRows, setHideZeroRows] = useState(true);
     // Add these state variables with your other useState hooks
     const [hoveredRowKey, setHoveredRowKey] = useState(null);
     const [highlightedColumns, setHighlightedColumns] = useState([]);
@@ -143,7 +141,7 @@ const ArticlesTable = () => {
     };
 
     useEffect(() => {
-        const errorHandler = (e: any) => {
+        const errorHandler = (e) => {
             if (
                 e.message.includes(
                     "ResizeObserver loop completed with undelivered notifications" ||
@@ -175,6 +173,8 @@ const ArticlesTable = () => {
                 fetchedData.sort((a, b) => a.c_articolo.localeCompare(b.c_articolo));
 
                 setData(fetchedData);
+                // Make sure hideZeroRows is set to true as default
+                setHideZeroRows(true);
             } catch (error) {
                 message.error("Failed to fetch data from the server.");
                 console.error("Error fetching data:", error);
@@ -642,7 +642,7 @@ const ArticlesTable = () => {
         //{
         //    title: "Dep. 20", // Customize for another field
         //    dataIndex: "giac_d20",
-        //    key: "giac_d20",
+    //    key: "giac_d20",
       //},
         {
             title: "Dep. 32", // Customize for another field
@@ -665,7 +665,7 @@ const ArticlesTable = () => {
             key: "giac_d60",
         },
         {
-            tle: "Dep. 81", // Customize for another field
+            title: "Dep. 81", // Customize for another field
             dataIndex: "giac_d81",
             key: "giac_d81",
         },
@@ -1181,24 +1181,16 @@ const ArticlesTable = () => {
     const columnsToCheck = [
         "ord_mpp", "ord_mp", "ord_mc",
         "dom_mc", "dom_ms", "dom_msa", "dom_mss",
-        "off_mc", "off_ms", "off_msa", "off_mss"
+        "off_mc", "off_ms", "off_msa", "off_mss",
+        "giac_d01", "giac_d20", "giac_d32", "giac_d40", "giac_d48", "giac_d60", "giac_d81"
     ];
 
-    const filteredData = data.filter(item => {
-        // First check if we should hide rows with zero values
-        if (hideZeroValueRows) {
-            // If hideZeroValueRows is true, check if any of the columns have non-zero values
-            const hasNonZeroValue = columnsToCheck.some(key => item[key] !== 0);
-            if (!hasNonZeroValue) return false;
-        }
-        
-        // Then check if we should hide rows without movements
-        if (hideZeroRows) {
+    const filteredData = hideZeroRows
+        ? data.filter(item => {
+            // Check if there's at least one non-zero value in the columns we're checking
             return columnsToCheck.some(key => item[key] !== 0);
-        }
-        
-        return true;
-    });
+        })
+        : data;
     const [visibleDataColumns, setVisibleDataColumns] = useState(dataColumns.map(col => col.key));
     const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
     const handleClickOutside = () => {
@@ -1403,20 +1395,7 @@ const ArticlesTable = () => {
                 unCheckedChildren={<CloseOutlined />}
             /> 
                 <div style={{marginLeft:"10px", display:"inline"}}>Nascondi righe senza movimenti</div>
-            </div>
-            <div style={{padding: "5px 12px"}}>            
-                <Switch
-                checked={hideZeroValueRows}
-                onChange={() => {
-                    setHideZeroValueRows(!hideZeroValueRows);
-                    message.info("Righe aggiornate");
-                }}
-                title="Filtra"
-                checkedChildren={<CheckOutlined />}
-                unCheckedChildren={<CloseOutlined />}
-            /> 
-                <div style={{marginLeft:"10px", display:"inline"}}>Nascondi righe con valori zero</div>
-            </div>
+                </div>
         </Menu>
     );
 
