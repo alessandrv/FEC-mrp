@@ -38,6 +38,8 @@ const ArticlesTable = () => {
     const [currentRow, setCurrentRow] = useState(null);
     // Add this line with your other useState hooks
     const [hideZeroRows, setHideZeroRows] = useState(false);
+    // Add new state for zero value filtering
+    const [hideZeroValueRows, setHideZeroValueRows] = useState(true);
     // Add these state variables with your other useState hooks
     const [hoveredRowKey, setHoveredRowKey] = useState(null);
     const [highlightedColumns, setHighlightedColumns] = useState([]);
@@ -1182,11 +1184,21 @@ const ArticlesTable = () => {
         "off_mc", "off_ms", "off_msa", "off_mss"
     ];
 
-    const filteredData = hideZeroRows
-        ? data.filter(item =>
-            columnsToCheck.some(key => item[key] !== 0)
-        )
-        : data;
+    const filteredData = data.filter(item => {
+        // First check if we should hide rows with zero values
+        if (hideZeroValueRows) {
+            // If hideZeroValueRows is true, check if any of the columns have non-zero values
+            const hasNonZeroValue = columnsToCheck.some(key => item[key] !== 0);
+            if (!hasNonZeroValue) return false;
+        }
+        
+        // Then check if we should hide rows without movements
+        if (hideZeroRows) {
+            return columnsToCheck.some(key => item[key] !== 0);
+        }
+        
+        return true;
+    });
     const [visibleDataColumns, setVisibleDataColumns] = useState(dataColumns.map(col => col.key));
     const [isColumnSelectorVisible, setIsColumnSelectorVisible] = useState(false);
     const handleClickOutside = () => {
@@ -1391,7 +1403,20 @@ const ArticlesTable = () => {
                 unCheckedChildren={<CloseOutlined />}
             /> 
                 <div style={{marginLeft:"10px", display:"inline"}}>Nascondi righe senza movimenti</div>
-                </div>
+            </div>
+            <div style={{padding: "5px 12px"}}>            
+                <Switch
+                checked={hideZeroValueRows}
+                onChange={() => {
+                    setHideZeroValueRows(!hideZeroValueRows);
+                    message.info("Righe aggiornate");
+                }}
+                title="Filtra"
+                checkedChildren={<CheckOutlined />}
+                unCheckedChildren={<CloseOutlined />}
+            /> 
+                <div style={{marginLeft:"10px", display:"inline"}}>Nascondi righe con valori zero</div>
+            </div>
         </Menu>
     );
 
