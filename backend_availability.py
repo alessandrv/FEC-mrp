@@ -1,13 +1,76 @@
 import pyodbc
-from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException, Query, Request
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect, HTTPException, Query, Request, Depends, status
 import time
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from typing import List
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from typing import List, Optional
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from pydantic import BaseModel
+import hashlib
+
+# Security constants
+SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"  # Should be stored in env variables
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Token and user models
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+# Create OAuth2 scheme
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Password validation function
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    # In a real scenario, use a proper password hashing library like bcrypt
+    # This is a simplified example using SHA-256
+    hashed_input = hashlib.sha256(plain_password.encode()).hexdigest()
+    return hashed_input == hashed_password
+
+# User authentication
+def authenticate_user(username: str, password: str) -> bool:
+    # Hardcoded hash for 'FecHUB' - in production, use a proper user database
+    hashed_password = "6273196ddfee0839909882a24007dde8461b4c99ae2e106ccaca239e74cf2afd"
+    if username != "admin":
+        return False
+    return verify_password(password, hashed_password)
+
+# Create access token
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+# Token verification dependency
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    return token_data
 
 # Import products availability CRUD router
-
 
 app = FastAPI()
 
@@ -21,6 +84,38 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Login endpoint to get token
+@app.post("/token", response_model=Token)
+async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    user_authenticated = authenticate_user(form_data.username, form_data.password)
+    if not user_authenticated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": form_data.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
+
+# Add a password validation endpoint for the frontend
+@app.post("/validate_password")
+async def validate_password(request: Request):
+    try:
+        data = await request.json()
+        password = data.get("password", "")
+        
+        # You could use the same authentication function
+        is_valid = authenticate_user("admin", password)
+        
+        return {"valid": is_valid}
+    except Exception as e:
+        print(f"Error validating password: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 def get_connection():
@@ -127,9 +222,10 @@ and amg_code = ?
     """
 
 @app.get("/article_disponibilita")
-async def get_article_disponibilita(article_code: str):
+async def get_article_disponibilita(article_code: str, current_user: TokenData = Depends(get_current_user)):
     """
     Retrieves the availability data for a specific article code.
+    Protected by token authentication.
     """
     start_time = time.time()
     cursor = None  # Initialize cursor to None
@@ -170,12 +266,11 @@ async def get_article_disponibilita(article_code: str):
         if cursor is not None:
             cursor.close()
 
-
-
 @app.get("/get_disponibilita_articoli_commerciali")
-async def get_article_disponibilita():
+async def get_disponibilita_articoli(current_user: TokenData = Depends(get_current_user)):
     """
-    Retrieves the availability data for a specific article code.
+    Retrieves the availability data for all article codes.
+    Protected by token authentication.
     """
     start_time = time.time()
     cursor = None  # Initialize cursor to None
@@ -215,11 +310,11 @@ async def get_article_disponibilita():
         if cursor is not None:
             cursor.close()
 
-
 @app.get("/get_disponibilita_articoli")
-async def get_article_disponibilita():
+async def get_disponibilita_articoli(current_user: TokenData = Depends(get_current_user)):
     """
-    Retrieves the availability data for a specific article code.
+    Retrieves the availability data for all article codes.
+    Protected by token authentication.
     """
     start_time = time.time()
     cursor = None  # Initialize cursor to None
