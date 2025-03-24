@@ -94,8 +94,8 @@ async def add_product_availability(request: Request):
         # Insert the new record
         query = '''
             INSERT INTO products_availability 
-            (posizione, codice, descrizione) 
-            VALUES (?, ?, ?)
+            (posizione, codice, descrizione, is_hub) 
+            VALUES (?, ?, ?, 1)
         '''
         
         cursor.execute(query, (posizione, codice, descrizione))

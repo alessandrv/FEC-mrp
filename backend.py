@@ -639,10 +639,10 @@ def create_products_availability_table():
             ]
             
             insert_query = '''
-                INSERT INTO products_availability (posizione, codice, descrizione)
-                VALUES (?, ?, ?)
+                INSERT INTO products_availability (posizione, codice, descrizione, is_hub)
+                VALUES (?, ?, ?, 1)
             '''
-            
+
             for item in sample_data:
                 cursor.execute(insert_query, (item["posizione"], item["codice"], item["descrizione"]))
                 
