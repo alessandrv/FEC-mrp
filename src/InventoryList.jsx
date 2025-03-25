@@ -12,9 +12,10 @@ import {
     Tag,
     Radio,
     Tooltip as AntTooltip,
-
     Button,
     Switch,
+    Typography,
+    Alert,
 } from "antd";
 import { CheckOutlined, CloseOutlined, EllipsisOutlined, LoadingOutlined, MenuFoldOutlined, SearchOutlined } from "@ant-design/icons";
 import {
@@ -25,12 +26,12 @@ import {
     CartesianGrid,
     Tooltip,
     Legend,
-
 } from "recharts";
 import "./InventoryList.css"; // Custom CSS file for styling
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import useWebSocket from "./hooks/useWebSocket"; // Import the custom hook
+import { API_BASE_URL, WEBSOCKET_URL } from './config'; // Import configuration
 
 const ArticlesTable = () => {
     const [contextMenuVisible, setContextMenuVisible] = useState(false);
@@ -76,6 +77,15 @@ const ArticlesTable = () => {
     const [searchText, setSearchText] = useState("");
     const [apFilter, setApFilter] = useState("A");
 
+    // Add these new state variables at the beginning of the component
+    const [isSimulationModalVisible, setIsSimulationModalVisible] = useState(false);
+    const [simulationRows, setSimulationRows] = useState([{ code: '', quantity: '' }]);
+    const [selectedTimePeriod, setSelectedTimePeriod] = useState('today');
+
+    // Add these additional state variables for simulation results
+    const [simulationResults, setSimulationResults] = useState([]);
+    const [simulationLoading, setSimulationLoading] = useState(false);
+    const [simulationComplete, setSimulationComplete] = useState(false);
 
     const handleWebSocketMessage = (event) => {
         try {
@@ -92,15 +102,14 @@ const ArticlesTable = () => {
         }
     };
 
-    // Initialize WebSocket connection at the top level of the component
+    // Initialize WebSocket connection with environment variable
     useWebSocket(
-        'ws://172.16.16.66:8000/ws/articles',
+        `${WEBSOCKET_URL}/ws/articles`,
         handleWebSocketMessage,
         () => console.log('WebSocket connection opened.'),
         () => console.log('WebSocket connection closed.'),
         (error) => console.error('WebSocket error:', error)
     );
-    // Fetch data from the FastAPI backend
 
     // Fetch data from the FastAPI backend
     // Function to convert relevant values to integers, if needed
@@ -162,11 +171,11 @@ const ArticlesTable = () => {
         };
     }, []);
 
-    // Update the fetchData function to parse integer values
+    // Update fetchData to use environment variable
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const response = await axios.get("http://172.16.16.66:8000/articles");
+                const response = await axios.get(`${API_BASE_URL}/articles`);
                 let fetchedData = parseIntegerData(response.data);
 
                 // Sort the data based on 'c_articolo'
@@ -183,7 +192,7 @@ const ArticlesTable = () => {
             }
         };
         fetchData();
-    }, []);
+    }, []); // Remove API_BASE_URL from dependency array as it's imported and constant
 
     const handleStoricoOrdini = (articleCode, desc) => {
         // Open the modal and show loading spinner
@@ -199,7 +208,7 @@ const ArticlesTable = () => {
     const fetchOrderHistoryData = async (articleCode) => {
         try {
             // Fetch data from the backend
-            const response = await axios.get("http://172.16.16.66:8000/article_history", {
+            const response = await axios.get(`${API_BASE_URL}/article_history`, {
                 params: { article_code: articleCode },
             });
 
@@ -215,7 +224,7 @@ const ArticlesTable = () => {
             // Process data if necessary
             setOrderHistoryData(data);
         } catch (error) {
-            message.error("Impossibile trovare Impegno corrente.");
+            message.error("Nessun impegno corrente trovato.");
             console.error("Error fetching order history data:", error);
             setIsOrderHistoryModalVisible(false);
         } finally {
@@ -349,7 +358,7 @@ const ArticlesTable = () => {
 
             console.time('API call time');
             // Fetch processed data from the backend
-            const response = await axios.get("http://172.16.16.66:8000/article_price", {
+            const priceResponse = await axios.get(`${API_BASE_URL}/article_price`, {
                 params: { article_code: articleCode },
             });
             console.timeEnd('API call time');
@@ -361,7 +370,7 @@ const ArticlesTable = () => {
                 valuta,
                 maxPriceData,
                 minPriceData,
-            } = response.data;
+            } = priceResponse.data;
 
             if (rawData.length === 0) {
                 message.info("No price data available for this article.");
@@ -1333,17 +1342,17 @@ const ArticlesTable = () => {
 
     const fetchTodayOrdersData = async () => {
         try {
-            const response = await axios.get("http://172.16.16.66:8000/today_orders");
-            const fetchedData = response.data;
+            const todayOrdersResponse = await axios.get(`${API_BASE_URL}/today_orders`);
+            const todayOrdersData = todayOrdersResponse.data;
 
-            if (!Array.isArray(fetchedData) || fetchedData.length === 0) {
+            if (!Array.isArray(todayOrdersData) || todayOrdersData.length === 0) {
                 message.info("Nessun ordine inserito oggi.");
                 setIsTodayOrdersModalVisible(false);
                 setTodayOrdersLoading(false);
                 return;
             }
 
-            setTodayOrdersData(fetchedData);
+            setTodayOrdersData(todayOrdersData);
         } catch (error) {
             message.error("Impossibile recuperare gli ordini odierni.");
             console.error("Error fetching today's orders data:", error);
@@ -1366,6 +1375,134 @@ const ArticlesTable = () => {
         message.info("Righe aggiornate")
     };
 
+    // Add this function to handle adding a new row
+    const handleAddSimulationRow = () => {
+        setSimulationRows([...simulationRows, { code: '', quantity: '' }]);
+    };
+
+    // Add this function to handle updating a row
+    const handleSimulationRowChange = (index, field, value) => {
+        const updatedRows = [...simulationRows];
+        updatedRows[index][field] = value;
+        setSimulationRows(updatedRows);
+    };
+
+    // Add this function to handle removing a row
+    const handleRemoveSimulationRow = (index) => {
+        if (simulationRows.length > 1) {
+            const updatedRows = simulationRows.filter((_, i) => i !== index);
+            setSimulationRows(updatedRows);
+        }
+    };
+
+    // Update the handleSimulate function to call an API
+    const handleSimulate = async () => {
+        // Validate that at least one row has both code and quantity
+        const hasValidData = simulationRows.some(row => row.code.trim() !== '' && row.quantity.trim() !== '');
+        
+        if (!hasValidData) {
+            message.error('Inserire almeno un codice articolo e una quantità valida');
+            return;
+        }
+        
+        // Filter out empty rows
+        const validRows = simulationRows.filter(row => row.code.trim() !== '' && row.quantity.trim() !== '');
+        
+        setSimulationLoading(true);
+        setSimulationComplete(false);
+        
+        try {
+            // Call the API endpoint with time period
+            const response = await axios.post(`${API_BASE_URL}/simulate_order`, {
+                items: validRows,
+                time_period: selectedTimePeriod
+            });
+            
+            // Store the results
+            setSimulationResults(response.data);
+            setSimulationComplete(true);
+            message.success('Simulazione completata con successo');
+        } catch (error) {
+            console.error('Error during simulation:', error);
+            message.error('Errore durante la simulazione. Riprova più tardi.');
+        } finally {
+            setSimulationLoading(false);
+        }
+    };
+
+    // Add this to reset the simulation modal state completely
+    const handleCloseSimulationModal = () => {
+        setIsSimulationModalVisible(false);
+        setSimulationRows([{ code: '', quantity: '' }]);
+        setSimulationResults([]);
+        setSimulationComplete(false);
+        setSelectedTimePeriod('today'); // Reset the time period as well
+    };
+
+    // Define columns for simulation results table
+    const simulationResultsColumns = [
+        {
+            title: "Codice",
+            dataIndex: "code",
+            key: "code",
+        },
+        {
+            title: "Descrizione",
+            dataIndex: "description",
+            key: "description",
+        },
+        {
+            title: "Codici Padre",
+            dataIndex: "parent_codes",
+            key: "parent_codes",
+        },
+        {
+            title: "Quantità Richiesta",
+            dataIndex: "requested_quantity",
+            key: "requested_quantity",
+        },
+        {
+            title: "Disponibilità Attuale",
+            dataIndex: "current_availability",
+            key: "current_availability",
+            render: (value) => {
+                if (value < 0) {
+                    return <span style={{ color: 'red' }}>{value}</span>;
+                }
+                return value;
+            },
+        },
+        {
+            title: "Disponibilità dopo Simulazione",
+            dataIndex: "simulated_availability",
+            key: "simulated_availability",
+            render: (value) => {
+                if (value < 0) {
+                    return <span style={{ color: 'red' }}>{value}</span>;
+                }
+                return value;
+            },
+        },
+        {
+            title: "Stato",
+            dataIndex: "status",
+            key: "status",
+            render: (text) => {
+                switch (text) {
+                    case 'OK':
+                        return <Tag color="green">Disponibile</Tag>;
+                    case 'PARTIAL':
+                        return <Tag color="orange">Parzialmente Disponibile</Tag>;
+                    case 'NOT_AVAILABLE':
+                        return <Tag color="red">Non Disponibile</Tag>;
+                    default:
+                        return text;
+                }
+            },
+        },
+    ];
+
+    // Modify the menu2 to include the Simulazione ordine option
     const menu2 = (
         <Menu>
             <Menu.Item key="exportExcel" onClick={exportExcel}>
@@ -1383,6 +1520,15 @@ const ArticlesTable = () => {
                 }}
             >
                 Visualizza ordini inseriti oggi
+            </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item
+                key="simulationOrder"
+                onClick={() => {
+                    setIsSimulationModalVisible(true);
+                }}
+            >
+                Simulazione ordine
             </Menu.Item>
             <Menu.Divider />
 
@@ -1670,6 +1816,121 @@ const ArticlesTable = () => {
                             />
                         </div>
                     )}
+                </Modal>
+
+                {/* Simulation Order Modal */}
+                <Modal
+                    title="Simulazione Ordine"
+                    visible={isSimulationModalVisible}
+                    onCancel={handleCloseSimulationModal}
+                    footer={[
+                        <Button key="cancel" onClick={handleCloseSimulationModal}>
+                            Chiudi
+                        </Button>,
+                        <Button 
+                            key="simulate" 
+                            type="primary" 
+                            onClick={handleSimulate}
+                            loading={simulationLoading}
+                            disabled={simulationLoading}
+                        >
+                            Simula
+                        </Button>
+                    ]}
+                    width={1600}
+                >
+                    <div>
+                        <div style={{ marginBottom: '20px' }}>
+                            {simulationRows.map((row, index) => (
+                                <div key={index} style={{ display: 'flex', marginBottom: '10px', alignItems: 'center' }}>
+                                    <Input
+                                        placeholder="Codice Articolo"
+                                        value={row.code}
+                                        onChange={(e) => handleSimulationRowChange(index, 'code', e.target.value)}
+                                        style={{ marginRight: '10px', flex: 2 }}
+                                        disabled={simulationLoading}
+                                    />
+                                    <Input
+                                        placeholder="Quantità"
+                                        type="number"
+                                        value={row.quantity}
+                                        onChange={(e) => handleSimulationRowChange(index, 'quantity', e.target.value)}
+                                        style={{ marginRight: '10px', flex: 1 }}
+                                        disabled={simulationLoading}
+                                    />
+                                    {simulationRows.length > 1 && (
+                                        <Button
+                                            type="text"
+                                            danger
+                                            icon={<CloseOutlined />}
+                                            onClick={() => handleRemoveSimulationRow(index)}
+                                            disabled={simulationLoading}
+                                        />
+                                    )}
+                                </div>
+                            ))}
+                            <Button
+                                type="dashed"
+                                onClick={handleAddSimulationRow}
+                                style={{ width: '100%', marginTop: '10px' }}
+                                icon={<span>+</span>}
+                                disabled={simulationLoading}
+                            >
+                                Aggiungi articolo
+                            </Button>
+                            
+                            {/* Time Period Selector */}
+                            <div style={{ marginTop: '20px', marginBottom: '20px' }}>
+                                <Typography.Title level={5}>Periodo di simulazione:</Typography.Title>
+                                <Radio.Group 
+                                    value={selectedTimePeriod}
+                                    onChange={(e) => setSelectedTimePeriod(e.target.value)}
+                                    disabled={simulationLoading}
+                                >
+                                    <Radio value="today">OGGI</Radio>
+                                    <Radio value="mc">Mese corrente ({new Date().toLocaleDateString('it-IT', {month: 'long', year: 'numeric'})})</Radio>
+                                    <Radio value="ms">Mese successivo ({new Date(new Date().setMonth(new Date().getMonth() + 1)).toLocaleDateString('it-IT', {month: 'long', year: 'numeric'})})</Radio>
+                                    <Radio value="msa">Tra due mesi ({new Date(new Date().setMonth(new Date().getMonth() + 2)).toLocaleDateString('it-IT', {month: 'long', year: 'numeric'})})</Radio>
+                                    <Radio value="mss">Oltre ({new Date(new Date().setMonth(new Date().getMonth() + 3)).toLocaleDateString('it-IT', {month: 'long', year: 'numeric'})}+)</Radio>
+                                </Radio.Group>
+                            </div>
+                        </div>
+                        
+                        {simulationLoading && (
+                            <div style={{ textAlign: 'center', margin: '20px 0' }}>
+                                <Spin 
+                                    indicator={<LoadingOutlined spin />} 
+                                    size="large" 
+                                    tip="Elaborazione simulazione in corso..." 
+                                />
+                            </div>
+                        )}
+                        
+                        {simulationComplete && simulationResults.length > 0 && (
+                            <div style={{ marginTop: '20px' }}>
+                                <Typography.Title level={4}>Risultati della Simulazione</Typography.Title>
+                                <Table
+                                    dataSource={simulationResults}
+                                    columns={simulationResultsColumns}
+                                    rowKey="code"
+                                    pagination={false}
+                                    size="small"
+                                    bordered
+                                />
+                            </div>
+                        )}
+                        
+                        {simulationComplete && simulationResults.length === 0 && (
+                            <div style={{ textAlign: 'center', margin: '20px 0' }}>
+                                <Alert
+                                    message="Nessun risultato"
+                                    description="La simulazione non ha prodotto risultati. Controlla i codici articolo inseriti."
+                                    type="info"
+                                    showIcon
+                                />
+                            </div>
+                        )}
+                    </div>
                 </Modal>
 
             </div>

@@ -1395,3 +1395,372 @@ async def get_article_disponibilita():
         if cursor is not None:
             cursor.close()
 
+@app.post("/simulate_order")
+async def simulate_order(request: Request):
+    """
+    Simulates an order to check component availability.
+    Receives a list of article codes and quantities, and a time period, then returns availability data for all components.
+    Time periods: 
+    - "today": Current availability only
+    - "mc": Current month (including demands and supplies for current month)
+    - "ms": Next month (including demands and supplies for next month)
+    - "msa": Two months ahead
+    - "mss": Beyond two months
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        # Parse the request body
+        data = await request.json()
+        items = data.get("items", [])
+        time_period = data.get("time_period", "today")
+        
+        # Validate time_period
+        valid_periods = ["today", "mc", "ms", "msa", "mss"]
+        if time_period not in valid_periods:
+            time_period = "today"  # Default to today if invalid
+        
+        if not items:
+            return JSONResponse(
+                content={"message": "No items provided for simulation."},
+                status_code=400
+            )
+            
+        conn = get_cached_connection()
+        cursor = conn.cursor()
+        
+        # Lists to store all component article codes and their required quantities
+        all_components = []
+        component_quantities = {}
+        component_parents = {}  # To track parent codes for each component
+        
+        # For each item in the request, get all its components
+        for item in items:
+            article_code = item.get("code")
+            try:
+                # Convert to integer immediately
+                requested_quantity = int(float(item.get("quantity", 0)))
+            except (ValueError, TypeError):
+                requested_quantity = 0
+            
+            if not article_code or requested_quantity <= 0:
+                continue
+                
+            # Query to get the components (bill of materials) for this article
+            bom_query = """
+            select m.mpl_padre, m.mpl_figlio, n.amg_dest, m.mpl_coimp
+            from mplegami m
+            inner join mganag n on (m.mpl_figlio = n.amg_code)
+            where mpl_padre = ?
+            """
+            
+            cursor.execute(bom_query, (article_code,))
+            components = cursor.fetchall()
+            
+            # If no components found, add the article itself as a component
+            if not components:
+                # Get the article description
+                article_query = "select amg_code, amg_dest from mganag where amg_code = ?"
+                cursor.execute(article_query, (article_code,))
+                article_row = cursor.fetchone()
+                
+                if article_row:
+                    all_components.append({
+                        "parent_code": None,
+                        "code": article_row.amg_code,
+                        "description": article_row.amg_dest,
+                        "quantity_per_unit": 1,
+                        "total_quantity": requested_quantity
+                    })
+                    
+                    # Update the required quantity
+                    component_quantities[article_row.amg_code] = component_quantities.get(article_row.amg_code, 0) + requested_quantity
+                    # No parent to track since this is a standalone article
+                    component_parents[article_row.amg_code] = ["None"]
+            else:
+                # Process each component
+                for comp in components:
+                    component_code = comp.mpl_figlio
+                    parent_code = comp.mpl_padre
+                    try:
+                        # Convert to integer
+                        quantity_per_unit = int(float(comp.mpl_coimp))
+                    except (ValueError, TypeError):
+                        quantity_per_unit = 1
+                        
+                    total_quantity = quantity_per_unit * requested_quantity
+                    
+                    all_components.append({
+                        "parent_code": parent_code,
+                        "code": component_code,
+                        "description": comp.amg_dest,
+                        "quantity_per_unit": quantity_per_unit,
+                        "total_quantity": total_quantity
+                    })
+                    
+                    # Update the required quantity
+                    component_quantities[component_code] = component_quantities.get(component_code, 0) + total_quantity
+                    
+                    # Track parent for this component
+                    if component_code not in component_parents:
+                        component_parents[component_code] = []
+                    if parent_code not in component_parents[component_code]:
+                        component_parents[component_code].append(parent_code)
+        
+        # If no components were found for any items
+        if not all_components:
+            return JSONResponse(
+                content={"message": "No components found for the provided items."},
+                status_code=404
+            )
+            
+        # Get unique component codes
+        unique_component_codes = list(set(comp["code"] for comp in all_components))
+        
+        if not unique_component_codes:
+            return JSONResponse(
+                content={"message": "No valid component codes found."},
+                status_code=404
+            )
+        
+        # Use a single optimized query to get availability data for all components at once
+        # Create the OR condition part of the query
+        code_conditions = " OR ".join([f"amg_code = '{code}'" for code in unique_component_codes])
+        
+        availability_query = f"""
+        select amg_code c_articolo, amg_dest d_articolo, amp_lead lt,
+nvl((select round(dep_scom) from mgdepo where dep_arti = amg_code and dep_code = 1),0) scrt,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 1) giac_d01,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 20) giac_d20,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 32) giac_d32,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 40) giac_d40,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 48) giac_d48,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 60) giac_d60,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 81) giac_d81,
+(select round(dep_qgiai+dep_qcar-dep_qsca+dep_qord+dep_qorp-dep_qpre-dep_qprp,0) from mgdepo 
+  where dep_arti = amg_code and dep_code = 1) 
+- (select sum(mpf_qfab) from mpfabbi, mpordil where mpf_ordl = mol_code and mpf_feva = 'N' and mol_stato = 'P'
+and mpf_arti = amg_code)
+disp_d01,
+nvl((select sum(occ_qmov) from ocordic, ocordit where occ_arti = amg_code
+  and occ_tipo = oct_tipo and occ_code = oct_code
+  and oct_data between last_day(add_months(today,-3))+1 and last_day(add_months(today,-2))),0) +
+nvl((select sum(mpf_qfab) from mpfabbi, mpordil where mpf_arti = amg_code 
+  and mpf_ordl = mol_code and mol_code not in (select gol_mpco from mpordgol)
+  and mol_dati between last_day(add_months(today,-3))+1 and last_day(add_months(today,-2))),0) + 
+nvl((select sum(mpf_qfab) from mpfabbi, mpordil, mpordgol, ocordit where mpf_arti = amg_code 
+  and mpf_ordl = mol_code and mol_code = gol_mpco and gol_octi = oct_tipo and gol_occo = oct_code
+  and oct_data between last_day(add_months(today,-3))+1 and last_day(add_months(today,-2))),0) ord_mpp,
+nvl((select sum(occ_qmov) from ocordic, ocordit where occ_arti = amg_code
+  and occ_tipo = oct_tipo and occ_code = oct_code
+  and oct_data between last_day(add_months(today,-2))+1 and last_day(add_months(today,-1))),0) +
+nvl((select sum(mpf_qfab) from mpfabbi, mpordil where mpf_arti = amg_code 
+  and mpf_ordl = mol_code and mol_code not in (select gol_mpco from mpordgol)
+  and mol_dati between last_day(add_months(today,-2))+1 and last_day(add_months(today,-1))),0) + 
+nvl((select sum(mpf_qfab) from mpfabbi, mpordil, mpordgol, ocordit where mpf_arti = amg_code 
+  and mpf_ordl = mol_code and mol_code = gol_mpco and gol_octi = oct_tipo and gol_occo = oct_code
+  and oct_data between last_day(add_months(today,-2))+1 and last_day(add_months(today,-1))),0) ord_mp,
+nvl((select sum(occ_qmov) from ocordic, ocordit where occ_arti = amg_code
+  and occ_tipo = oct_tipo and occ_code = oct_code
+  and oct_data between last_day(add_months(today,-1))+1 and last_day(today)),0) +
+nvl((select sum(mpf_qfab) from mpfabbi, mpordil where mpf_arti = amg_code 
+  and mpf_ordl = mol_code and mol_code not in (select gol_mpco from mpordgol)
+  and mol_dati between last_day(add_months(today,-1))+1 and last_day(today)),0) + 
+nvl((select sum(mpf_qfab) from mpfabbi, mpordil, mpordgol, ocordit where mpf_arti = amg_code 
+  and mpf_ordl = mol_code and mol_code = gol_mpco and gol_octi = oct_tipo and gol_occo = oct_code
+  and oct_data between last_day(add_months(today,-1))+1 and last_day(today)),0) ord_mc,
+nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code
+and occ_feva = 'N'
+  and occ_dtco <= last_day(today)),0) +
+nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
+  and mpf_dfab <= last_day(today)),0) dom_mc,
+nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code
+and occ_feva = 'N'
+  and occ_dtco between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))),0) +
+nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
+  and mpf_dfab between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))),0) dom_ms,
+nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code
+and occ_feva = 'N'
+  and occ_dtco between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))),0) +
+nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
+  and mpf_dfab between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))),0) dom_msa,
+nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code
+and occ_feva = 'N'
+  and occ_dtco >= last_day(add_months(today,+2))+1),0) +
+nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
+  and mpf_dfab >= last_day(add_months(today,+2))+1),0) dom_mss,
+nvl((select sum(ofc_qord-ofc_qcon) from ofordic where ofc_arti = amg_code and ofc_feva = 'N'
+  and ofc_dtco <= last_day(today)),0) +
+nvl((select sum(mol_quaor-mol_quari) from mpordil where mol_parte = amg_code and mol_stato in ('A')
+  and mol_dats <= last_day(today)),0) off_mc,
+nvl((select sum(ofc_qord-ofc_qcon) from ofordic where ofc_arti = amg_code and ofc_feva = 'N'
+  and ofc_dtco between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))),0) +
+nvl((select sum(mol_quaor-mol_quari) from mpordil where mol_parte = amg_code and mol_stato in ('A')
+  and mol_dats between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))),0) off_ms,
+nvl((select sum(ofc_qord-ofc_qcon) from ofordic where ofc_arti = amg_code and ofc_feva = 'N'
+  and ofc_dtco between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))),0) +
+nvl((select sum(mol_quaor-mol_quari) from mpordil where mol_parte = amg_code and mol_stato in ('A')
+  and mol_dats between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))),0) off_msa,
+nvl((select sum(ofc_qord-ofc_qcon) from ofordic where ofc_arti = amg_code and ofc_feva = 'N'
+  and ofc_dtco >= last_day(add_months(today,2))+1),0) +
+nvl((select sum(mol_quaor-mol_quari) from mpordil where mol_parte = amg_code and mol_stato in ('A')
+  and mol_dats >= last_day(add_months(today,2))+1),0) off_mss
+from mganag, mppoli
+where amg_code = amp_code and amp_depo = 1
+and amg_stat = 'D' 
+and nvl(amg_fagi,'S') = 'S'
+and ({code_conditions})
+        """
+        
+        cursor.execute(availability_query)
+        avail_rows = cursor.fetchall()
+        
+        if not avail_rows:
+            return JSONResponse(
+                content={"message": "No availability data found for the components."},
+                status_code=404
+            )
+        
+        # Get column names and convert to list of dictionaries
+        avail_columns = [column[0] for column in cursor.description]
+        avail_data_list = [dict(zip(avail_columns, row)) for row in avail_rows]
+        
+        # Create a lookup dictionary for quick access to availability data by article code
+        avail_data_by_code = {item["c_articolo"]: item for item in avail_data_list}
+        
+        # Helper function to calculate availability based on time period
+        def calculate_availability(data, period):
+            if not data:
+                return 0
+                
+            try:
+                # Current stock
+                giac_d01 = int(data.get("giac_d01", 0))
+                
+                if period == "today":
+                    return giac_d01
+                    
+                # Current month
+                dom_mc = int(data.get("dom_mc", 0))
+                off_mc = int(data.get("off_mc", 0))
+                mc_result = giac_d01 - dom_mc + off_mc
+                
+                if period == "mc":
+                    return mc_result
+                    
+                # Next month
+                dom_ms = int(data.get("dom_ms", 0))
+                off_ms = int(data.get("off_ms", 0))
+                ms_result = mc_result - dom_ms + off_ms
+                
+                if period == "ms":
+                    return ms_result
+                    
+                # Two months ahead
+                dom_msa = int(data.get("dom_msa", 0))
+                off_msa = int(data.get("off_msa", 0))
+                msa_result = ms_result - dom_msa + off_msa
+                
+                if period == "msa":
+                    return msa_result
+                    
+                # Beyond two months
+                dom_mss = int(data.get("dom_mss", 0))
+                off_mss = int(data.get("off_mss", 0))
+                mss_result = msa_result - dom_mss + off_mss
+                
+                return mss_result
+            except (ValueError, TypeError) as e:
+                print(f"Error calculating availability: {e}")
+                return 0
+        
+        # Build the final result with calculated availabilities
+        availability_results = []
+        
+        for component_code in unique_component_codes:
+            if component_code in avail_data_by_code:
+                avail_data = avail_data_by_code[component_code]
+                
+                # Calculate current availability based on time period
+                current_availability = calculate_availability(avail_data, time_period)
+                
+                # Calculate availability after simulation
+                required_quantity = int(component_quantities.get(component_code, 0))
+                simulated_availability = current_availability - required_quantity
+                
+                # Convert safety stock to integer
+                try:
+                    safety_stock = int(avail_data.get("scrt", 0))
+                except (ValueError, TypeError):
+                    safety_stock = 0
+                
+                # Convert lead time to integer
+                try:
+                    lead_time = int(avail_data.get("lt", 0))
+                except (ValueError, TypeError):
+                    lead_time = 0
+                
+                # Determine status
+                status = "OK"
+                if simulated_availability < 0:
+                    status = "NOT_AVAILABLE"
+                elif simulated_availability < safety_stock:
+                    status = "PARTIAL"
+                
+                # Get parent codes for this component and join with commas
+                parent_codes = component_parents.get(component_code, ["None"])
+                parent_codes_str = ", ".join(parent_codes)
+                
+                # Add to results
+                availability_results.append({
+                    "code": component_code,
+                    "description": avail_data.get("d_articolo", ""),
+                    "parent_codes": parent_codes_str,
+                    "requested_quantity": required_quantity,
+                    "current_availability": current_availability,
+                    "simulated_availability": simulated_availability,
+                    "lead_time": lead_time,
+                    "safety_stock": safety_stock,
+                    "time_period": time_period,
+                    "status": status
+                })
+            else:
+                # If we couldn't find availability data, add a placeholder
+                required_quantity = int(component_quantities.get(component_code, 0))
+                
+                # Look up the description if possible
+                description = next((comp["description"] for comp in all_components if comp["code"] == component_code), "")
+                
+                # Get parent codes for this component and join with commas
+                parent_codes = component_parents.get(component_code, ["None"])
+                parent_codes_str = ", ".join(parent_codes)
+                
+                availability_results.append({
+                    "code": component_code,
+                    "description": description,
+                    "parent_codes": parent_codes_str,
+                    "requested_quantity": required_quantity,
+                    "current_availability": 0,
+                    "simulated_availability": -required_quantity,
+                    "lead_time": 0,
+                    "safety_stock": 0,
+                    "time_period": time_period,
+                    "status": "NOT_AVAILABLE"
+                })
+        
+        # Sort results by status (NOT_AVAILABLE first, then PARTIAL, then OK)
+        status_order = {"NOT_AVAILABLE": 0, "PARTIAL": 1, "OK": 2}
+        availability_results.sort(key=lambda x: status_order.get(x["status"], 3))
+        
+        total_time = time.time() - start_time
+        print(f"Total simulation execution time: {total_time} seconds")
+        
+        return JSONResponse(content=jsonable_encoder(availability_results))
+            
+    except Exception as e:
+        print(f"Error during order simulation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
