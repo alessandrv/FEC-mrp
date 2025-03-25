@@ -6,8 +6,15 @@ from functools import lru_cache
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
-from typing import List
+from typing import List, Dict, Any, Optional
 import asyncio
+import os
+from dotenv import load_dotenv
+from contextlib import contextmanager
+from datetime import datetime, timedelta
+
+# Load environment variables
+load_dotenv()
 
 # Import products availability CRUD router
 import products_availability_crud
@@ -26,15 +33,138 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Database connection configuration
+DB_CONFIG = {
+    'DSN': os.getenv('DB_DSN', 'fec'),
+    'UID': os.getenv('DB_UID', 'informix'),
+    'PWD': os.getenv('DB_PWD', 'informix'),
+    'POOL_SIZE': int(os.getenv('DB_POOL_SIZE', '10')),
+}
+
+# Result caching system
+cache: Dict[str, Dict[str, Any]] = {}
+
+def get_cached_result(key: str) -> Optional[Any]:
+    """
+    Get a result from the cache if it exists and is not expired.
+    """
+    if key in cache:
+        cache_entry = cache[key]
+        if datetime.now() < cache_entry['expires']:
+            return cache_entry['data']
+        else:
+            # Cache expired, remove it
+            del cache[key]
+    return None
+
+def cache_result(key: str, data: Any, ttl_seconds: int = 300):
+    """
+    Cache a result with a specific TTL.
+    """
+    cache[key] = {
+        'data': data,
+        'expires': datetime.now() + timedelta(seconds=ttl_seconds)
+    }
+
+def clear_cache():
+    """
+    Clear all cached results.
+    """
+    cache.clear()
+
+async def cache_cleanup_task():
+    """
+    Periodically clean up expired cache entries.
+    """
+    while True:
+        now = datetime.now()
+        keys_to_remove = []
+        
+        # Find expired cache entries
+        for key, entry in cache.items():
+            if now > entry['expires']:
+                keys_to_remove.append(key)
+        
+        # Remove expired entries
+        for key in keys_to_remove:
+            del cache[key]
+        
+        # Log cleanup stats
+        if keys_to_remove:
+            print(f"Cache cleanup: removed {len(keys_to_remove)} expired entries. Cache size: {len(cache)}")
+        
+        # Sleep for 5 minutes
+        await asyncio.sleep(300)
+
+# Connection pool
+connection_pool = []
+pool_lock = asyncio.Lock()
+
+async def initialize_connection_pool():
+    """Initialize the connection pool with a set number of connections."""
+    print(f"Initializing connection pool with {DB_CONFIG['POOL_SIZE']} connections")
+    for _ in range(DB_CONFIG['POOL_SIZE']):
+        try:
+            conn = pyodbc.connect(
+                f'DSN={DB_CONFIG["DSN"]};UID={DB_CONFIG["UID"]};PWD={DB_CONFIG["PWD"]};'
+            )
+            connection_pool.append(conn)
+        except Exception as e:
+            print(f"Error creating connection: {e}")
+    print(f"Connection pool initialized with {len(connection_pool)} connections")
+
+@contextmanager
+def get_connection_from_pool():
+    """Get a connection from the pool and return it when done."""
+    conn = None
+    try:
+        if not connection_pool:
+            # If pool is empty, create a new connection
+            conn = pyodbc.connect(
+                f'DSN={DB_CONFIG["DSN"]};UID={DB_CONFIG["UID"]};PWD={DB_CONFIG["PWD"]};'
+            )
+        else:
+            # Get a connection from the pool
+            conn = connection_pool.pop()
+        
+        yield conn
+    except Exception as e:
+        print(f"Connection error: {e}")
+        # If there was an error with this connection, don't return it to the pool
+        if conn:
+            try:
+                conn.close()
+            except:
+                pass
+            conn = None
+        raise
+    finally:
+        # Return the connection to the pool if it's still valid
+        if conn:
+            try:
+                # Test if connection is still good
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.close()
+                connection_pool.append(conn)
+            except:
+                # Connection is bad, close it
+                try:
+                    conn.close()
+                except:
+                    pass
 
 def get_connection():
+    """Legacy function to maintain compatibility."""
     conn = pyodbc.connect(
-       'DSN=fec;UID=informix;PWD=informix;'
+       f'DSN={DB_CONFIG["DSN"]};UID={DB_CONFIG["UID"]};PWD={DB_CONFIG["PWD"]};'
     )
     return conn
 
 def get_cached_connection():
-    # Removed caching to avoid using stale connections
+    """Legacy function to maintain compatibility."""
+    # For now, still create a new connection to avoid changing logic elsewhere
+    # Better approach is to migrate all code to use get_connection_from_pool
     return get_connection()
 
 today_orders_query = '''
@@ -273,242 +403,234 @@ def get_article_price_query():
     """
 @app.get("/articles")
 async def get_articles():
-    start_time = time.time()
-    cursor = None  # Initialize cursor to None
-    try:
-        conn = get_cached_connection()
-        cursor = conn.cursor()
-        
-        query = get_optimized_query()
-        
-        # Measure query execution time
-        query_start = time.time()
-        cursor.execute(query)
-        query_execution_time = time.time() - query_start
-        print(f"Query execution time: {query_execution_time} seconds")
-        
-        # Measure data fetching time
-        fetch_start = time.time()
-        rows = cursor.fetchall()
-        fetch_time = time.time() - fetch_start
-        print(f"Data fetch time: {fetch_time} seconds")
-        
-        # Measure data processing time
-        process_start = time.time()
-        columns = [column[0] for column in cursor.description]
-        results = [dict(zip(columns, row)) for row in rows]
-        processing_time = time.time() - process_start
-        print(f"Data processing time: {processing_time} seconds")
-        
-        # Measure serialization time
-        serialize_start = time.time()
-        json_content = json.dumps(results, default=str)
-        serialization_time = time.time() - serialize_start
-        print(f"Serialization time: {serialization_time} seconds")
-        
-        total_time = time.time() - start_time
-        print(f"Total execution time: {total_time} seconds")
-        
+    """
+    Get all articles with availability information.
+    This is a high-traffic endpoint, so we cache the results.
+    """
+    # Try to get results from cache first (cache for 5 minutes)
+    CACHE_TTL = int(os.getenv('ARTICLES_CACHE_TTL_SECONDS', '300'))
+    cache_key = "all_articles"
+    cached_data = get_cached_result(cache_key)
+    
+    if cached_data:
         return Response(
-            content=json_content,
+            content=cached_data,
             media_type="application/json"
         )
+    
+    # If not in cache, fetch from database
+    start_time = time.time()
+    try:
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+            
+            query = get_optimized_query()
+            
+            # Measure query execution time
+            query_start = time.time()
+            cursor.execute(query)
+            query_execution_time = time.time() - query_start
+            print(f"Query execution time: {query_execution_time} seconds")
+            
+            # Measure data fetching time
+            fetch_start = time.time()
+            rows = cursor.fetchall()
+            fetch_time = time.time() - fetch_start
+            print(f"Data fetch time: {fetch_time} seconds")
+            
+            # Measure data processing time
+            process_start = time.time()
+            columns = [column[0] for column in cursor.description]
+            results = [dict(zip(columns, row)) for row in rows]
+            processing_time = time.time() - process_start
+            print(f"Data processing time: {processing_time} seconds")
+            
+            # Measure serialization time
+            serialize_start = time.time()
+            json_content = json.dumps(results, default=str)
+            serialization_time = time.time() - serialize_start
+            print(f"Serialization time: {serialization_time} seconds")
+            
+            # Cache the serialized result
+            cache_result(cache_key, json_content, CACHE_TTL)
+            
+            total_time = time.time() - start_time
+            print(f"Total execution time: {total_time} seconds")
+            
+            return Response(
+                content=json_content,
+                media_type="application/json"
+            )
     except Exception as e:
         print(f"Error: {str(e)}")
         raise
-    finally:
-        if cursor is not None:
-            cursor.close()
 
 @app.get("/article_price")
 async def get_article_price(article_code: str):
+    """
+    Get price history for a specific article.
+    """
+    # Try to get results from cache first (cache for 15 minutes)
+    CACHE_TTL = int(os.getenv('ARTICLE_PRICE_CACHE_TTL_SECONDS', '900'))
+    cache_key = f"article_price_{article_code}"
+    cached_data = get_cached_result(cache_key)
+    
+    if cached_data:
+        return JSONResponse(content=cached_data)
+    
     start_time = time.time()
-    cursor = None  # Initialize cursor to None
     try:
-        conn = get_cached_connection()
-        cursor = conn.cursor()
-        
-        # Prepare the query
-        query = get_article_price_query()
-        
-        # Execute the query with the article code parameter
-        cursor.execute(query, (article_code,))
-        
-        # Fetch all results
-        rows = cursor.fetchall()
-        
-        # Check if any rows were returned
-        if not rows:
-            return JSONResponse(
-                content={"message": "Article not found."},
-                status_code=404
-            )
-        
-        # Convert the results to a list of dictionaries
-        columns = [column[0] for column in cursor.description]
-        results = [
-            dict(zip(columns, row))
-            for row in rows
-        ]
-        
-        # Process data on the backend
-        from collections import defaultdict
-        from datetime import datetime
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+            
+            # Prepare the query
+            query = get_article_price_query()
+            
+            # Execute the query with the article code parameter
+            cursor.execute(query, (article_code,))
+            
+            # Fetch all results
+            rows = cursor.fetchall()
+            
+            # Check if any rows were returned
+            if not rows:
+                return JSONResponse(
+                    content={"message": "Article not found."},
+                    status_code=404
+                )
+            
+            # Convert the results to a list of dictionaries
+            columns = [column[0] for column in cursor.description]
+            results = [
+                dict(zip(columns, row))
+                for row in rows
+            ]
+            
+            # Process data on the backend
+            from collections import defaultdict
+            from datetime import datetime
 
-        # Prepare raw data
-        rawData = []
-        valuta = results[0]['valuta']
-        for item in results:
-            # Ensure the date is in ISO format
-            date_obj = item['date']
-            if isinstance(date_obj, datetime):
-                date_str = date_obj.isoformat()
-            else:
-                date_str = str(date_obj)
+            # Prepare raw data
+            rawData = []
+            valuta = results[0]['valuta']
+            for item in results:
+                # Ensure the date is in ISO format
+                date_obj = item['date']
+                if isinstance(date_obj, datetime):
+                    date_str = date_obj.isoformat()
+                else:
+                    date_str = str(date_obj)
 
-            rawData.append({
-                'date': date_str,
-                'price': float(item['price']),
-                'quantity': float(item['quantity']),
-                'valuta': item['valuta'],
-            })
-        
-        # Sort rawData by date
-        rawData.sort(key=lambda x: x['date'])
-        
-        # Compute average data per month
-        monthlyDataMap = defaultdict(lambda: {'total': 0, 'count': 0})
-        for item in rawData:
-            # Extract 'YYYY-MM' from date
-            month = item['date'][:7]
-            monthlyDataMap[month]['total'] += item['price']
-            monthlyDataMap[month]['count'] += 1
-        
-        averageData = []
-        for month, data in monthlyDataMap.items():
-            averageData.append({
-                'date': month,
-                'price': data['total'] / data['count'],
-            })
-        
-        # Sort averageData by date
-        averageData.sort(key=lambda x: x['date'])
-        
-        # Compute max and min price data
-        maxPriceData = max(rawData, key=lambda x: x['price'])
-        minPriceData = min(rawData, key=lambda x: x['price'])
-        
-        # Prepare the response
-        response = {
-            'rawData': rawData,
-            'averageData': averageData,
-            'valuta': valuta,
-            'maxPriceData': maxPriceData,
-            'minPriceData': minPriceData,
-        }
-        
-        total_time = time.time() - start_time
-        print(f"Total execution time: {total_time} seconds")
-        
-        return JSONResponse(content=jsonable_encoder(response))
+                rawData.append({
+                    'date': date_str,
+                    'price': float(item['price']),
+                    'quantity': float(item['quantity']),
+                    'valuta': item['valuta'],
+                })
+            
+            # Sort rawData by date
+            rawData.sort(key=lambda x: x['date'])
+            
+            # Compute average data per month
+            monthlyDataMap = defaultdict(lambda: {'total': 0, 'count': 0})
+            for item in rawData:
+                # Extract 'YYYY-MM' from date
+                month = item['date'][:7]
+                monthlyDataMap[month]['total'] += item['price']
+                monthlyDataMap[month]['count'] += 1
+            
+            averageData = []
+            for month, data in monthlyDataMap.items():
+                averageData.append({
+                    'date': month,
+                    'price': data['total'] / data['count'],
+                })
+            
+            # Sort averageData by date
+            averageData.sort(key=lambda x: x['date'])
+            
+            # Compute max and min price data
+            maxPriceData = max(rawData, key=lambda x: x['price'])
+            minPriceData = min(rawData, key=lambda x: x['price'])
+            
+            # Prepare the response
+            response = {
+                'rawData': rawData,
+                'averageData': averageData,
+                'valuta': valuta,
+                'maxPriceData': maxPriceData,
+                'minPriceData': minPriceData,
+            }
+            
+            # Encode the response
+            encoded_response = jsonable_encoder(response)
+            
+            # Cache the result
+            cache_result(cache_key, encoded_response, CACHE_TTL)
+            
+            total_time = time.time() - start_time
+            print(f"Total execution time: {total_time} seconds")
+            
+            return JSONResponse(content=encoded_response)
         
     except Exception as e:
         print(f"Error: {str(e)}")
         raise
-    finally:
-        if cursor is not None:
-            cursor.close()
 
-
-
-
-def get_article_history_query():
-    # SQL query with placeholders for the article code
-    return """
-select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
-       mpf_qfab * gol_qord / mol_quaor totale, 
-       (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
-       mol_parte, p.amg_desc mol_desc, 
-       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
-       oct_stap
-from mpfabbi, mpordil, mpordgol, ocordic, ocordit, agclifor, mganag f, mganag p, mggrum gf
-where mpf_ordl = mol_code
-and mol_code = gol_mpco
-and gol_octi = occ_tipo and gol_occo = occ_code and gol_ocri = occ_riga
-and oct_tipo = occ_tipo and oct_code = occ_code
-and oct_cocl = cod_clifor
-and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
-and mol_parte = p.amg_code
-and mpf_feva = 'N'
-and mpf_arti = ?
-union all
-select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
-       occ_qmov, occ_qmov-occ_qcon residuo, 
-       '' mol_parte, '' mol_desc, 
-       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
-       oct_stap
-from ocordic, ocordit, agclifor, mganag f, mggrum gf
-where oct_tipo = occ_tipo and oct_code = occ_code
-and oct_cocl = cod_clifor
-and occ_arti = f.amg_code and f.amg_grum = gf.gmg_code
-and occ_feva = 'N'
-and occ_arti = ?
-union all
-select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
-       mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
-       mol_parte, p.amg_desc mol_desc, 
-       "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
-       '' as oct_stap
-from mpfabbi, mpordil, mganag f, mganag p, mggrum gf
-where mpf_ordl = mol_code
-and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
-and mol_parte = p.amg_code
-and mpf_feva = 'N'
-and mpf_ordl = 1
-and mpf_arti = ?
-ORDER BY occ_dtco asc
-    """
 @app.get("/article_history")
 async def get_article_history(article_code: str):
+    """
+    Get article history for a specific article.
+    """
+    # Try to get results from cache first (cache for 10 minutes)
+    CACHE_TTL = int(os.getenv('ARTICLE_HISTORY_CACHE_TTL_SECONDS', '600'))
+    cache_key = f"article_history_{article_code}"
+    cached_data = get_cached_result(cache_key)
+    
+    if cached_data:
+        return JSONResponse(content=cached_data)
+        
     start_time = time.time()
-    cursor = None  # Initialize cursor to None
     try:
-        conn = get_cached_connection()
-        cursor = conn.cursor()
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
 
-        query = get_article_history_query()
+            query = get_article_history_query()
 
-        # Execute the query with the article code parameter
-        # Since the article code is used three times due to UNION ALL, we need to provide it three times
-        params = (article_code, article_code, article_code)
-        cursor.execute(query, params)
+            # Execute the query with the article code parameter
+            # Since the article code is used three times due to UNION ALL, we need to provide it three times
+            params = (article_code, article_code, article_code)
+            cursor.execute(query, params)
 
-        # Fetch all results
-        rows = cursor.fetchall()
+            # Fetch all results
+            rows = cursor.fetchall()
 
-        # Check if any rows were returned
-        if not rows:
-            return JSONResponse(
-                content={"message": "Article not found."},
-                status_code=404
-            )
+            # Check if any rows were returned
+            if not rows:
+                return JSONResponse(
+                    content={"message": "Article not found."},
+                    status_code=404
+                )
 
-        # Convert the results to a list of dictionaries
-        columns = [column[0] for column in cursor.description]
-        results = [dict(zip(columns, row)) for row in rows]
+            # Convert the results to a list of dictionaries
+            columns = [column[0] for column in cursor.description]
+            results = [dict(zip(columns, row)) for row in rows]
 
-        total_time = time.time() - start_time
-        print(f"Total execution time: {total_time} seconds")
+            # Encode the results
+            encoded_results = jsonable_encoder(results)
+            
+            # Cache the results
+            cache_result(cache_key, encoded_results, CACHE_TTL)
 
-        # Return the results as JSON
-        return JSONResponse(content=jsonable_encoder(results))
+            total_time = time.time() - start_time
+            print(f"Total execution time: {total_time} seconds")
+
+            # Return the results as JSON
+            return JSONResponse(content=encoded_results)
 
     except Exception as e:
         print(f"Error: {str(e)}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    finally:
-        if cursor is not None:
-            cursor.close()
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -553,109 +675,114 @@ from fastapi import BackgroundTasks
 
 @app.on_event("startup")
 async def startup_event():
+    # Initialize the connection pool
+    await initialize_connection_pool()
+    
+    # Start the broadcast task in the background
     asyncio.create_task(broadcast_articles_periodically())
+    
+    # Start the cache cleanup task
+    asyncio.create_task(cache_cleanup_task())
+    
     # Create products_availability table if it doesn't exist
+    create_products_availability_table()
 
 async def broadcast_articles_periodically():
     """
     Broadcast articles periodically to connected WebSocket clients.
     """
+    # Reduce broadcast frequency from 30s to 60s to lower CPU usage
+    BROADCAST_INTERVAL = int(os.getenv('BROADCAST_INTERVAL_SECONDS', '60'))
+    
     while True:
-        cursor = None  # Initialize cursor to None
         try:
-            # Fetch the latest articles data
-            conn = get_cached_connection()
-            cursor = conn.cursor()
-            
-            query = get_optimized_query()
-            cursor.execute(query)
-            rows = cursor.fetchall()
-            columns = [column[0] for column in cursor.description]
-            results = [dict(zip(columns, row)) for row in rows]
-            
-            # Serialize the data to JSON
-            json_content = json.dumps(results, default=str)
-            
-            # Broadcast the data to all connected clients
-            await manager.broadcast(json_content)
-            
-            # Log the broadcast
-            print(f"Broadcasted articles data at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            with get_connection_from_pool() as conn:
+                cursor = conn.cursor()
+                
+                query = get_optimized_query()
+                cursor.execute(query)
+                rows = cursor.fetchall()
+                columns = [column[0] for column in cursor.description]
+                results = [dict(zip(columns, row)) for row in rows]
+                
+                # Serialize the data to JSON
+                json_content = json.dumps(results, default=str)
+                
+                # Broadcast the data to all connected clients
+                await manager.broadcast(json_content)
+                
+                # Log the broadcast
+                print(f"Broadcasted articles data at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # Don't need to close cursor here as it's handled by the context manager
         except Exception as e:
             print(f"Error broadcasting articles data: {e}")
-        finally:
-            if cursor is not None:
-                cursor.close()
         
-        # Wait for a specified interval before the next update
-        await asyncio.sleep(30)  # Broadcast every 30 seconds
+        # Wait for the specified interval before the next update
+        await asyncio.sleep(BROADCAST_INTERVAL)
 
 def create_products_availability_table():
     """
     Create the products_availability table if it doesn't exist
     """
-    cursor = None
     try:
-        conn = get_cached_connection()
-        cursor = conn.cursor()
-        
-        # Check if the table exists
-        cursor.execute('''
-            SELECT COUNT(*) FROM information_schema.tables 
-            WHERE table_schema = 'public' AND table_name = 'products_availability'
-        ''')
-        
-        table_exists = cursor.fetchone()[0] > 0
-        
-        if not table_exists:
-            print("Creating products_availability table...")
-            # Create the table
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+            
+            # Check if the table exists
             cursor.execute('''
-                CREATE TABLE products_availability (
-                    posizione INTEGER PRIMARY KEY,
-                    codice VARCHAR(255) NOT NULL,
-                    descrizione VARCHAR(255) NOT NULL
-                )
+                SELECT COUNT(*) FROM information_schema.tables 
+                WHERE table_schema = 'public' AND table_name = 'products_availability'
             ''')
             
-            # Insert sample data if needed
-            sample_data = [
-                {"posizione":1,"codice":"0P9GA0FI","descrizione":"PP9735 SINGLE HINGE STAND"},
-                {"posizione":2,"codice":"0P9GA1FI","descrizione":"PP9735W SINGLE HINGE STAND"},
-                {"posizione":3,"codice":"0P9EF6FI","descrizione":"PP9732W NO STAND"},
-                {"posizione":4,"codice":"0P9ET1FI","descrizione":"PP9715 DUAL HINGE STAND"},
-                {"posizione":5,"codice":"14886751","descrizione":"CORE I3 9100T FOR PP9715"},
-                {"posizione":6,"codice":"14886771","descrizione":"CORE I5 9500TE FOR PP9715"},
-                {"posizione":7,"codice":"0P9EG2FI","descrizione":"PP9745W SINGLE HINGE STAND"},
-                {"posizione":8,"codice":"0P9EQ3FI","descrizione":"XPOS PLUS 15,6 XP-3765W"},
-                {"posizione":9,"codice":"0P9EG1FI","descrizione":"PP9742W NO STAND"},
-                {"posizione":10,"codice":"14887030,14887031","descrizione":"CORE I3 12100 FOR PP9745W/9742W/XPOS PLUS 15,6"},
-                {"posizione":11,"codice":"14887020,14887021","descrizione":"CORE I5 12400 FOR PP9745W/9742W and XPOS PLUS 15,6"},
-                {"posizione":12,"codice":"0ST900SB","descrizione":"TP100 PRINTER USB-LAN-COM"},
-                {"posizione":13,"codice":"0MN858FI","descrizione":"MONITOR 15\" AM1015CL"},
-                {"posizione":14,"codice":"0MN860FI","descrizione":"MONITOR 22\" LD9022W"},
-                {"posizione":15,"codice":"0MN872FI","descrizione":"MONITOR 15\" AM1015CL"},
-                {"posizione":16,"codice":"0MN873FI","descrizione":"MONITOR 15\" XM-3015-AD"}
-            ]
+            table_exists = cursor.fetchone()[0] > 0
             
-            insert_query = '''
-                INSERT INTO products_availability (posizione, codice, descrizione, is_hub)
-                VALUES (?, ?, ?, 1)
-            '''
-
-            for item in sample_data:
-                cursor.execute(insert_query, (item["posizione"], item["codice"], item["descrizione"]))
+            if not table_exists:
+                print("Creating products_availability table...")
+                # Create the table
+                cursor.execute('''
+                    CREATE TABLE products_availability (
+                        posizione INTEGER PRIMARY KEY,
+                        codice VARCHAR(255) NOT NULL,
+                        descrizione VARCHAR(255) NOT NULL
+                    )
+                ''')
                 
-            conn.commit()
-            print("products_availability table created with sample data")
-        else:
-            print("products_availability table already exists")
+                # Insert sample data if needed
+                sample_data = [
+                    {"posizione":1,"codice":"0P9GA0FI","descrizione":"PP9735 SINGLE HINGE STAND"},
+                    {"posizione":2,"codice":"0P9GA1FI","descrizione":"PP9735W SINGLE HINGE STAND"},
+                    {"posizione":3,"codice":"0P9EF6FI","descrizione":"PP9732W NO STAND"},
+                    {"posizione":4,"codice":"0P9ET1FI","descrizione":"PP9715 DUAL HINGE STAND"},
+                    {"posizione":5,"codice":"14886751","descrizione":"CORE I3 9100T FOR PP9715"},
+                    {"posizione":6,"codice":"14886771","descrizione":"CORE I5 9500TE FOR PP9715"},
+                    {"posizione":7,"codice":"0P9EG2FI","descrizione":"PP9745W SINGLE HINGE STAND"},
+                    {"posizione":8,"codice":"0P9EQ3FI","descrizione":"XPOS PLUS 15,6 XP-3765W"},
+                    {"posizione":9,"codice":"0P9EG1FI","descrizione":"PP9742W NO STAND"},
+                    {"posizione":10,"codice":"14887030,14887031","descrizione":"CORE I3 12100 FOR PP9745W/9742W/XPOS PLUS 15,6"},
+                    {"posizione":11,"codice":"14887020,14887021","descrizione":"CORE I5 12400 FOR PP9745W/9742W and XPOS PLUS 15,6"},
+                    {"posizione":12,"codice":"0ST900SB","descrizione":"TP100 PRINTER USB-LAN-COM"},
+                    {"posizione":13,"codice":"0MN858FI","descrizione":"MONITOR 15\" AM1015CL"},
+                    {"posizione":14,"codice":"0MN860FI","descrizione":"MONITOR 22\" LD9022W"},
+                    {"posizione":15,"codice":"0MN872FI","descrizione":"MONITOR 15\" AM1015CL"},
+                    {"posizione":16,"codice":"0MN873FI","descrizione":"MONITOR 15\" XM-3015-AD"}
+                ]
+                
+                insert_query = '''
+                    INSERT INTO products_availability (posizione, codice, descrizione, is_hub)
+                    VALUES (?, ?, ?, 1)
+                '''
+
+                for item in sample_data:
+                    cursor.execute(insert_query, (item["posizione"], item["codice"], item["descrizione"]))
+                    
+                conn.commit()
+                print("products_availability table created with sample data")
+            else:
+                print("products_availability table already exists")
             
     except Exception as e:
         print(f"Error creating products_availability table: {e}")
-    finally:
-        if cursor is not None:
-            cursor.close()
 
 @app.get("/today_orders")
 async def get_today_orders():
@@ -1763,4 +1890,51 @@ and ({code_conditions})
     finally:
         if cursor is not None:
             cursor.close()
+
+def get_article_history_query():
+    # SQL query with placeholders for the article code
+    return """
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+       mpf_qfab * gol_qord / mol_quaor totale, 
+       (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
+       mol_parte, p.amg_desc mol_desc, 
+       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
+       oct_stap
+from mpfabbi, mpordil, mpordgol, ocordic, ocordit, agclifor, mganag f, mganag p, mggrum gf
+where mpf_ordl = mol_code
+and mol_code = gol_mpco
+and gol_octi = occ_tipo and gol_occo = occ_code and gol_ocri = occ_riga
+and oct_tipo = occ_tipo and oct_code = occ_code
+and oct_cocl = cod_clifor
+and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
+and mol_parte = p.amg_code
+and mpf_feva = 'N'
+and mpf_arti = ?
+union all
+select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+       occ_qmov, occ_qmov-occ_qcon residuo, 
+       '' mol_parte, '' mol_desc, 
+       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
+       oct_stap
+from ocordic, ocordit, agclifor, mganag f, mggrum gf
+where oct_tipo = occ_tipo and oct_code = occ_code
+and oct_cocl = cod_clifor
+and occ_arti = f.amg_code and f.amg_grum = gf.gmg_code
+and occ_feva = 'N'
+and occ_arti = ?
+union all
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+       mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
+       mol_parte, p.amg_desc mol_desc, 
+       "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
+       '' as oct_stap
+from mpfabbi, mpordil, mganag f, mganag p, mggrum gf
+where mpf_ordl = mol_code
+and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
+and mol_parte = p.amg_code
+and mpf_feva = 'N'
+and mpf_ordl = 1
+and mpf_arti = ?
+ORDER BY occ_dtco asc
+    """
 
