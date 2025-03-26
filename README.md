@@ -1,70 +1,60 @@
-# Getting Started with Create React App
+# MRP Combined Application
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This application combines the backend.py and backend_availability.py FastAPI applications into a single instance to reduce CPU usage and simplify deployment.
 
-## Available Scripts
+## Running the Combined Application
 
-In the project directory, you can run:
+To run the combined application, use the following command:
 
-### `npm start`
+```bash
+python -m uvicorn main:app --host 172.16.16.27 --port 8000 --reload
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+Alternatively, you can execute the main.py file directly:
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+```bash
+python main.py
+```
 
-### `npm test`
+## API Endpoints
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+The combined application mounts both APIs under different prefixes:
 
-### `npm run build`
+- Original backend.py endpoints are available at `/api/...`
+- Original backend_availability.py endpoints are available at `/availability/...`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### Example URL Changes
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Before:
+- `http://172.16.16.27:8000/articles`
+- `http://172.16.16.27:8001/article_history`
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+After:
+- `http://172.16.16.27:8000/api/articles`
+- `http://172.16.16.27:8000/availability/article_history`
 
-### `npm run eject`
+## Benefits
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+1. **Reduced CPU Usage**: Running a single uvicorn process instead of two
+2. **Simplified Deployment**: Only one service to manage
+3. **Common Connection Pool**: Both applications can share the same database connection pool
+4. **Easier Maintenance**: All code runs together for easier debugging
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Updating the Frontend
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+If you have frontend applications that connect to these APIs, you'll need to update the URLs to include the new prefixes.
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+Example changes:
+- From: `fetch('http://172.16.16.27:8000/articles')`
+- To: `fetch('http://172.16.16.27:8000/api/articles')`
 
-## Learn More
+- From: `fetch('http://172.16.16.27:8001/article_history')`
+- To: `fetch('http://172.16.16.27:8000/availability/article_history')`
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+## Troubleshooting
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+If you encounter any issues:
 
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+1. Make sure both backend.py and backend_availability.py are in the same directory as main.py
+2. Check for any endpoint naming conflicts between the two applications
+3. Verify that frontend applications have been updated to use the new URL prefixes

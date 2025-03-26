@@ -10,6 +10,8 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from pydantic import BaseModel
 import hashlib
+import os
+import json
 
 # Security constants
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"  # Should be stored in env variables
@@ -557,6 +559,34 @@ and nvl(amg_fagi,'S') = 'S'
         if cursor is not None:
             cursor.close()
 
+# Simple in-memory cache
+_cache = {}
+
+def get_connection_from_pool():
+    """Get a connection from a connection pool (or create a new one if pool not initialized)"""
+    # For simplicity, we're just getting a new connection
+    # In a production system, you would implement an actual connection pool
+    return get_connection()
+
+def get_from_cache(key):
+    """Get a value from the cache if it exists and is not expired"""
+    if key in _cache:
+        entry = _cache[key]
+        if entry['expiry'] > time.time():
+            return entry['data']
+        else:
+            # Clean up expired entries
+            del _cache[key]
+    return None
+
+def store_in_cache(key, data, ttl=300):
+    """Store a value in the cache with an expiration time"""
+    expiry = time.time() + ttl
+    _cache[key] = {
+        'data': data,
+        'expiry': expiry
+    }
+
 @app.get("/articles_commerciali")
 async def get_articles_commerciali(current_user: TokenData = Depends(get_current_user)):
     """
@@ -567,8 +597,16 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
     start_time = time.time()
     cursor = None
     try:
-        conn = get_cached_connection()
+        conn = get_connection_from_pool()
         cursor = conn.cursor()
+        
+        # Check if we have a cached result
+        cache_key = "commercial_articles"
+        cached_result = get_from_cache(cache_key)
+        if cached_result:
+            total_time = time.time() - start_time
+            print(f"Returned cached result for commercial articles in {total_time} seconds")
+            return JSONResponse(content=cached_result)
         
         # 1. First get the list of article codes from products_availability where is_hub = 0
         article_query = "SELECT * FROM products_availability WHERE is_hub = 0"
@@ -585,8 +623,11 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
         article_columns = [column[0] for column in cursor.description]
         article_data = [dict(zip(article_columns, article)) for article in articles]
         
+        # Create a mapping of article codes to their original data for later merging
+        article_mapping = {article['codice']: article for article in article_data if 'codice' in article}
+        
         # Extract article codes and create the OR condition for the next query
-        article_codes = [article['codice'] for article in article_data if 'codice' in article]
+        article_codes = list(article_mapping.keys())
         
         if not article_codes:
             return JSONResponse(
@@ -689,28 +730,50 @@ and nvl(amg_fagi,'S') = 'S'
         cursor.execute(availability_query)
         results = cursor.fetchall()
         
-        if not results:
-            return JSONResponse(
-                content={"message": "No availability data found for commercial articles."},
-                status_code=404
-            )
-        
         # Get column names and convert to list of dictionaries
         result_columns = [column[0] for column in cursor.description]
-        final_data = [dict(zip(result_columns, row)) for row in results]
+        availability_data = [dict(zip(result_columns, row)) for row in results]
+        
+        # Create a mapping of article codes to availability data
+        availability_mapping = {}
+        for item in availability_data:
+            if 'c_articolo' in item:
+                availability_mapping[item['c_articolo']] = item
+        
+        # Combine the original article data with the availability data
+        combined_data = []
+        for code, article in article_mapping.items():
+            if code in availability_mapping:
+                # Create a copy of the original article data
+                combined_item = article.copy()
+                # Add the availability data
+                combined_item.update(availability_mapping[code])
+                combined_data.append(combined_item)
+            else:
+                # If we didn't get availability data for this code, still include it but with zeros
+                combined_item = article.copy()
+                # Add empty availability fields
+                for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
+                             'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                             'off_mc', 'off_ms', 'off_msa', 'off_mss']:
+                    combined_item[field] = 0
+                combined_data.append(combined_item)
         
         # Make sure all numeric fields are properly initialized
-        for article in final_data:
+        for article in combined_data:
             for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
                          'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
                          'off_mc', 'off_ms', 'off_msa', 'off_mss']:
                 if field not in article or article[field] is None:
                     article[field] = 0
         
+        # Cache the result
+        store_in_cache(cache_key, combined_data, ttl=300)  # Cache for 5 minutes
+        
         total_time = time.time() - start_time
         print(f"Total execution time for commercial articles: {total_time} seconds")
         
-        return JSONResponse(content=jsonable_encoder(final_data))
+        return JSONResponse(content=jsonable_encoder(combined_data))
         
     except Exception as e:
         print(f"Error: {str(e)}")
@@ -718,9 +781,7 @@ and nvl(amg_fagi,'S') = 'S'
     finally:
         if cursor is not None:
             cursor.close()
-
-
-
+        # No need to close the connection when using a connection pool
 
 def get_article_history_query():
     # SQL query with placeholders for the article code
