@@ -1950,6 +1950,7 @@ async def get_report_groups():
     """
     start_time = time.time()
     cursor = None
+    groups = []
     try:
         with get_connection_from_pool() as conn:
             cursor = conn.cursor()
@@ -1967,8 +1968,8 @@ async def get_report_groups():
             
             total_time = time.time() - start_time
             print(f"Total execution time for getting report groups: {total_time} seconds")
-            
-            return groups
+        
+        return groups
         
     except Exception as e:
         print(f"Error getting report groups: {str(e)}")
@@ -1990,6 +1991,7 @@ async def get_report_group_articles(name: str):
     """
     start_time = time.time()
     cursor = None
+    article_codes = []
     try:
         with get_connection_from_pool() as conn:
             cursor = conn.cursor()
@@ -2007,8 +2009,8 @@ async def get_report_group_articles(name: str):
             
             total_time = time.time() - start_time
             print(f"Total execution time for getting articles in group {name}: {total_time} seconds")
-            
-            return article_codes
+        
+        return article_codes
         
     except Exception as e:
         print(f"Error getting articles for group {name}: {str(e)}")
@@ -2033,6 +2035,7 @@ async def add_to_report_group(item: ReportGroupItem):
         A message indicating the success of the operation.
     """
     cursor = None
+    message = ""
     try:
         with get_connection_from_pool() as conn:
             cursor = conn.cursor()
@@ -2043,14 +2046,16 @@ async def add_to_report_group(item: ReportGroupItem):
             count = cursor.fetchone()[0]
             
             if count > 0:
-                return {"message": f"Article {item.art_code} is already in group {item.name}"}
-            
-            # Insert the new entry
-            insert_query = "INSERT INTO report_groups (name, art_code) VALUES (?, ?)"
-            cursor.execute(insert_query, (item.name, item.art_code))
-            conn.commit()
-            
-            return {"message": f"Article {item.art_code} added to group {item.name}"}
+                message = {"message": f"Article {item.art_code} is already in group {item.name}"}
+            else:
+                # Insert the new entry
+                insert_query = "INSERT INTO report_groups (name, art_code) VALUES (?, ?)"
+                cursor.execute(insert_query, (item.name, item.art_code))
+                conn.commit()
+                
+                message = {"message": f"Article {item.art_code} added to group {item.name}"}
+        
+        return message
         
     except Exception as e:
         print(f"Error adding article to group: {str(e)}")
@@ -2075,6 +2080,7 @@ async def delete_from_report_group(
         A message indicating the success of the operation.
     """
     cursor = None
+    message = ""
     try:
         with get_connection_from_pool() as conn:
             cursor = conn.cursor()
@@ -2088,7 +2094,7 @@ async def delete_from_report_group(
                 if cursor.rowcount == 0:
                     raise HTTPException(status_code=404, detail=f"Article {art_code} not found in group {name}")
                     
-                return {"message": f"Article {art_code} removed from group {name}"}
+                message = {"message": f"Article {art_code} removed from group {name}"}
             else:
                 # Delete the entire group
                 delete_query = "DELETE FROM report_groups WHERE name = ?"
@@ -2098,7 +2104,9 @@ async def delete_from_report_group(
                 if cursor.rowcount == 0:
                     raise HTTPException(status_code=404, detail=f"Group {name} not found")
                     
-                return {"message": f"Group {name} deleted"}
+                message = {"message": f"Group {name} deleted"}
+        
+        return message
         
     except HTTPException:
         raise
