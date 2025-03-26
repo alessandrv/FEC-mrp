@@ -5,13 +5,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from typing import List, Optional
+from typing import List, Optional, Any
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from pydantic import BaseModel
 import hashlib
 import os
 import json
+from decimal import Decimal
+
+# Custom JSON encoder to handle Decimal values
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Decimal):
+            return float(o)
+        return super(DecimalEncoder, self).default(o)
+
+def custom_jsonable_encoder(obj: Any) -> Any:
+    """Custom encoder that handles Decimal objects by converting them to floats."""
+    if isinstance(obj, dict):
+        return {k: custom_jsonable_encoder(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [custom_jsonable_encoder(i) for i in obj]
+    elif isinstance(obj, Decimal):
+        return float(obj)
+    # Use the default jsonable_encoder for other types
+    return jsonable_encoder(obj)
 
 # Security constants
 SECRET_KEY = "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"  # Should be stored in env variables
@@ -406,8 +425,16 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
     start_time = time.time()
     cursor = None
     try:
-        conn = get_cached_connection()
+        conn = get_connection_from_pool()
         cursor = conn.cursor()
+        
+        # Check if we have a cached result
+        cache_key = "all_articles"
+        cached_result = get_from_cache(cache_key)
+        if cached_result:
+            total_time = time.time() - start_time
+            print(f"Returned cached result for articles in {total_time} seconds")
+            return JSONResponse(content=cached_result)
         
         # 1. First get the list of article codes from products_availability where is_hub = 1
         article_query = "SELECT * FROM products_availability WHERE is_hub = 1"
@@ -424,8 +451,17 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
         article_columns = [column[0] for column in cursor.description]
         article_data = [dict(zip(article_columns, article)) for article in articles]
         
+        # Create a mapping of article codes to their original data for later merging
+        # Standardize keys by trimming whitespace and converting to uppercase
+        article_mapping = {}
+        for article in article_data:
+            if 'codice' in article and article['codice']:
+                # Standardize the code by trimming and converting to uppercase
+                std_code = article['codice'].strip().upper()
+                article_mapping[std_code] = article
+        
         # Extract article codes and create the OR condition for the next query
-        article_codes = [article['codice'] for article in article_data if 'codice' in article]
+        article_codes = list(article_mapping.keys())
         
         if not article_codes:
             return JSONResponse(
@@ -435,10 +471,10 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
         
         # 2. Build a single query to get availability data for all articles at once
         # Create the OR condition part of the query
-        code_conditions = " OR ".join([f"amg_code = '{code}'" for code in article_codes])
+        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in article_codes])
         
         availability_query = f"""
-        select amg_code c_articolo, amg_dest d_articolo,
+        select TRIM(amg_code) c_articolo, amg_dest d_articolo,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 1) giac_d01,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 20) giac_d20,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 32) giac_d32,
@@ -448,7 +484,7 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 81) giac_d81,
 (select round(dep_qgiai+dep_qcar-dep_qsca+dep_qord+dep_qorp-dep_qpre-dep_qprp,0) from mgdepo 
   where dep_arti = amg_code and dep_code = 1) 
-- (select sum(mpf_qfab) from mpfabbi, mpordil where mpf_ordl = mol_code and mpf_feva = 'N' and mol_stato = 'P'
+- (select NVL(sum(mpf_qfab), 0) from mpfabbi, mpordil where mpf_ordl = mol_code and mpf_feva = 'N' and mol_stato = 'P'
 and mpf_arti = amg_code)
 disp_d01,
 nvl((select sum(occ_qmov) from ocordic, ocordit where occ_arti = amg_code -- and occ_tipo in ('O','P','Q')
@@ -536,27 +572,67 @@ and nvl(amg_fagi,'S') = 'S'
         
         # Get column names and convert to list of dictionaries
         result_columns = [column[0] for column in cursor.description]
-        final_data = [dict(zip(result_columns, row)) for row in results]
+        availability_data = [dict(zip(result_columns, row)) for row in results]
         
-        # Make sure all numeric fields are properly initialized
-        for article in final_data:
+        # Create a mapping of article codes to availability data
+        # Also standardize these keys to avoid mismatches
+        availability_mapping = {}
+        for item in availability_data:
+            if 'c_articolo' in item and item['c_articolo']:
+                # Standardize the code by trimming and converting to uppercase
+                std_code = item['c_articolo'].strip().upper()
+                availability_mapping[std_code] = item
+        
+        # Combine the original article data with the availability data
+        combined_data = []
+        for code, article in article_mapping.items():
+            if code in availability_mapping:
+                # Create a copy of the original article data
+                combined_item = article.copy()
+                # Add the availability data
+                combined_item.update(availability_mapping[code])
+                combined_data.append(combined_item)
+            else:
+                # If we didn't get availability data for this code, still include it but with zeros
+                combined_item = article.copy()
+                # Add empty availability fields
+                for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
+                             'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                             'off_mc', 'off_ms', 'off_msa', 'off_mss']:
+                    combined_item[field] = 0
+                combined_data.append(combined_item)
+        
+        # Make sure all numeric fields are properly initialized and convert Decimal to float
+        for article in combined_data:
             for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
-                         'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                         'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
                          'off_mc', 'off_ms', 'off_msa', 'off_mss']:
                 if field not in article or article[field] is None:
                     article[field] = 0
+                # Convert Decimal objects to float for JSON serialization
+                elif hasattr(article[field], 'as_integer_ratio'):  # Check if it's a Decimal object
+                    article[field] = float(article[field])
+        
+        # Cache the result
+        store_in_cache(cache_key, combined_data, ttl=300)  # Cache for 5 minutes
         
         total_time = time.time() - start_time
         print(f"Total execution time for articles: {total_time} seconds")
         
-        return JSONResponse(content=jsonable_encoder(final_data))
+        # Use our custom encoder to handle Decimal objects
+        encoded_data = custom_jsonable_encoder(combined_data)
+        return JSONResponse(content=encoded_data)
         
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error in get_articles: {str(e)}")
+        print(f"Error details: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     finally:
         if cursor is not None:
             cursor.close()
+        # No need to close the connection when using a connection pool
 
 # Simple in-memory cache
 _cache = {}
@@ -784,13 +860,16 @@ and nvl(amg_fagi,'S') = 'S'
                     combined_item[field] = 0
                 combined_data.append(combined_item)
         
-        # Make sure all numeric fields are properly initialized
+        # Make sure all numeric fields are properly initialized and convert Decimal to float
         for article in combined_data:
             for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
                          'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
                          'off_mc', 'off_ms', 'off_msa', 'off_mss']:
                 if field not in article or article[field] is None:
                     article[field] = 0
+                # Convert Decimal objects to float for JSON serialization
+                elif hasattr(article[field], 'as_integer_ratio'):  # Check if it's a Decimal object
+                    article[field] = float(article[field])
         
         # Cache the result
         store_in_cache(cache_key, combined_data, ttl=300)  # Cache for 5 minutes
@@ -798,7 +877,9 @@ and nvl(amg_fagi,'S') = 'S'
         total_time = time.time() - start_time
         print(f"Total execution time for commercial articles: {total_time} seconds")
         
-        return JSONResponse(content=jsonable_encoder(combined_data))
+        # Use our custom encoder to handle Decimal objects
+        encoded_data = custom_jsonable_encoder(combined_data)
+        return JSONResponse(content=encoded_data)
         
     except Exception as e:
         print(f"Error in get_articles_commerciali: {str(e)}")
@@ -862,8 +943,16 @@ async def get_article_history(article_code: str, current_user: TokenData = Depen
     start_time = time.time()
     cursor = None  # Initialize cursor to None
     try:
-        conn = get_cached_connection()
+        conn = get_connection_from_pool()
         cursor = conn.cursor()
+
+        # Check if we have a cached result
+        cache_key = f"article_history_{article_code}"
+        cached_result = get_from_cache(cache_key)
+        if cached_result:
+            total_time = time.time() - start_time
+            print(f"Returned cached result for article history in {total_time} seconds")
+            return JSONResponse(content=cached_result)
 
         query = get_article_history_query()
 
@@ -886,15 +975,29 @@ async def get_article_history(article_code: str, current_user: TokenData = Depen
         columns = [column[0] for column in cursor.description]
         results = [dict(zip(columns, row)) for row in rows]
 
-        total_time = time.time() - start_time
-        print(f"Total execution time: {total_time} seconds")
+        # Convert any Decimal values to floats
+        for result in results:
+            for key, value in result.items():
+                if isinstance(value, Decimal):
+                    result[key] = float(value)
 
-        # Return the results as JSON
-        return JSONResponse(content=jsonable_encoder(results))
+        # Cache the result
+        store_in_cache(cache_key, results, ttl=300)  # Cache for 5 minutes
+
+        total_time = time.time() - start_time
+        print(f"Total execution time for article history: {total_time} seconds")
+
+        # Return the results using our custom encoder
+        encoded_results = custom_jsonable_encoder(results)
+        return JSONResponse(content=encoded_results)
 
     except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        print(f"Error in get_article_history: {str(e)}")
+        print(f"Error details: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     finally:
         if cursor is not None:
             cursor.close()
+        # No need to close the connection when using a connection pool
