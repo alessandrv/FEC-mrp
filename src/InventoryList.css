@@ -112,3 +112,12 @@ th.ant-table-cell {
     text-align: center !important;
 
 }
+
+/* Add styling for placeholder rows in Kiosk modal */
+.placeholder-row {
+    background-color: rgba(255, 77, 79, 0.05);
+}
+
+.placeholder-row:hover {
+    background-color: rgba(255, 77, 79, 0.1) !important;
+}

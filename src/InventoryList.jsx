@@ -16,6 +16,7 @@ import {
     Switch,
     Typography,
     Alert,
+    Select,
 } from "antd";
 import { CheckOutlined, CloseOutlined, EllipsisOutlined, LoadingOutlined, MenuFoldOutlined, SearchOutlined } from "@ant-design/icons";
 import {
@@ -37,6 +38,7 @@ const ArticlesTable = () => {
     const [contextMenuVisible, setContextMenuVisible] = useState(false);
     const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
     const [currentRow, setCurrentRow] = useState(null);
+    const [contextMenuOptions, setContextMenuOptions] = useState([]);
     // Add this line with your other useState hooks
     const [hideZeroRows, setHideZeroRows] = useState(true);
     // Add these state variables with your other useState hooks
@@ -86,6 +88,14 @@ const ArticlesTable = () => {
     const [simulationResults, setSimulationResults] = useState([]);
     const [simulationLoading, setSimulationLoading] = useState(false);
     const [simulationComplete, setSimulationComplete] = useState(false);
+
+    // Add these new state variables for the Kiosk modal
+    const [isKioskModalVisible, setIsKioskModalVisible] = useState(false);
+    const [kioskData, setKioskData] = useState([]);
+    const [selectedKiosk, setSelectedKiosk] = useState('Kiosk');
+
+    // Add the filter state for Kiosk modal
+    const [kioskFilter, setKioskFilter] = useState('');
 
     const handleWebSocketMessage = (event) => {
         try {
@@ -143,10 +153,33 @@ const ArticlesTable = () => {
         }));
     };
     const handleContextMenu = (event, record) => {
-        event.preventDefault(); // Prevent the default browser context menu
-        setCurrentRow(record); // Set the current row data
-        setContextMenuPosition({ x: event.clientX, y: event.clientY }); // Set menu position
-        setContextMenuVisible(true); // Show the context menu
+        event.preventDefault();
+        setCurrentRow(record);
+        setContextMenuPosition({
+            left: event.clientX,
+            top: event.clientY,
+        });
+        setContextMenuVisible(true);
+        
+        // Add options to the context menu
+        setContextMenuOptions([
+            {
+                label: "Visualizza Storico Ordini",
+                key: "storico",
+                onClick: () => handleStoricoOrdini(record.c_articolo, record.d_articolo)
+            },
+            {
+                label: "Visualizza Dati Articolo",
+                key: "articolo",
+                onClick: () => handleAPClick(record.c_articolo)
+            },
+            // Add the new Kiosk option
+            {
+                label: "Visualizza Kiosk",
+                key: "kiosk",
+                onClick: () => handleKioskClick()
+            }
+        ]);
     };
 
     useEffect(() => {
@@ -308,28 +341,17 @@ const ArticlesTable = () => {
     ];
     const contextMenu = (
         <Menu>
-            <Menu.Item
-                key="displayModal"
-                onClick={() => {
-                    if (currentRow) {
-                        handleAPClick(currentRow.c_articolo);
+            {contextMenuOptions.map((option) => (
+                <Menu.Item
+                    key={option.key}
+                    onClick={() => {
+                        option.onClick();
                         setContextMenuVisible(false);
-                    }
-                }}
-            >
-                Storico Prezzi
-            </Menu.Item>
-            <Menu.Item
-                key="storicoOrdini"
-                onClick={() => {
-                    if (currentRow) {
-                        handleStoricoOrdini(currentRow.c_articolo);
-                        setContextMenuVisible(false);
-                    }
-                }}
-            >
-                Impegno corrente
-            </Menu.Item>
+                    }}
+                >
+                    {option.label}
+                </Menu.Item>
+            ))}
         </Menu>
     );
 
@@ -1502,53 +1524,143 @@ const ArticlesTable = () => {
         },
     ];
 
-    // Modify the menu2 to include the Simulazione ordine option
+    // Update handleKioskClick to properly find articles in the main data using case-insensitive matching
+    const handleKioskClick = () => {
+        // Predefined list of article codes for Kiosk
+        const kioskArticleCodes = [
+            '0AC618MC', '0AC619MC', '0AC620MC', '0AC621MC', '0AC641MC',
+            '0AC642MC', '0AC625MC', '0AC637MC', '69120005', 'GUIDEKIOSK32',
+            '0AC423501', '53082108', '69120006', '69120009', '66319015',
+            '69120016', '61820003', '61820005', '66319008', '69120007',
+            '61920001', '69120018', '61820004', '58742030', '58742031',
+            '0AC100WE', '0AC961FI', '0AC640MC', '0AC623MC'
+        ];
+        
+        // Reset filter when opening the modal
+        setKioskFilter('');
+
+        // Display a loading message
+        message.loading({ content: 'Caricamento dati Kiosk...', key: 'kioskLoading' });
+        
+        console.log(`Searching for Kiosk articles among ${data.length} total articles`);
+        
+        // Get all articles that match any of the Kiosk codes (case-insensitive)
+        const matchedArticles = data.filter(item => 
+            kioskArticleCodes.some(code => 
+                code.toLowerCase() === item.c_articolo.toLowerCase().trim()
+            )
+        );
+        
+        console.log(`Found ${matchedArticles.length} matching Kiosk articles in real data`);
+        
+        // Create a map of actual articles by code (lowercase for case-insensitive matching)
+        const articlesMap = new Map();
+        data.forEach(item => {
+            articlesMap.set(item.c_articolo.toLowerCase().trim(), item);
+        });
+        
+        // Start with matched articles
+        let finalKioskData = [...matchedArticles];
+        
+        // Check for missing codes and create placeholders with "NOT FOUND" description 
+        // but maintain proper structure from a real article
+        const matchedCodes = matchedArticles.map(item => item.c_articolo.toLowerCase().trim());
+        const missingCodes = kioskArticleCodes.filter(code => 
+            !matchedCodes.includes(code.toLowerCase().trim())
+        );
+        
+        console.log(`Missing ${missingCodes.length} Kiosk articles in data`);
+        
+        // If we have missing codes, create proper placeholders based on a real article's structure
+        if (missingCodes.length > 0 && data.length > 0) {
+            // Use an existing article as template for structure
+            const templateArticle = data[0];
+            
+            // Create placeholders for missing codes
+            const placeholderArticles = missingCodes.map(code => {
+                // Create a placeholder based on the template, with all zeros for numeric fields
+                const placeholder = { ...templateArticle };
+                
+                // Reset all numeric fields to 0
+                Object.keys(placeholder).forEach(key => {
+                    if (typeof placeholder[key] === 'number') {
+                        placeholder[key] = 0;
+                    }
+                });
+                
+                // Set the article code and description fields
+                placeholder.c_articolo = code;
+                placeholder.d_articolo = `Articolo Kiosk ${code} - NON TROVATO`;
+                placeholder.a_p = 'A';
+                placeholder.isPlaceholder = true;
+                
+                return placeholder;
+            });
+            
+            // Add placeholders to final data set
+            finalKioskData = [...finalKioskData, ...placeholderArticles];
+        }
+        
+        // Sort by article code
+        finalKioskData.sort((a, b) => a.c_articolo.localeCompare(b.c_articolo));
+        
+        // Open modal and set data
+        setIsKioskModalVisible(true);
+        setKioskData(finalKioskData);
+        
+        // Show appropriate message
+        if (matchedArticles.length === 0) {
+            message.info({ 
+                content: `Non sono stati trovati articoli Kiosk nel database (${missingCodes.length} mancanti)`, 
+                key: 'kioskLoading',
+                duration: 5
+            });
+        } else if (missingCodes.length > 0) {
+            message.success({ 
+                content: `Trovati ${matchedArticles.length} articoli reali. ${missingCodes.length} articoli non trovati nel database`, 
+                key: 'kioskLoading',
+                duration: 5
+            });
+        } else {
+            message.success({ 
+                content: `Trovati tutti i ${matchedArticles.length} articoli Kiosk nel database`, 
+                key: 'kioskLoading' 
+            });
+        }
+    };
+    
+    // Add back the handleUpdateKioskData function
+    const handleUpdateKioskData = () => {
+        handleKioskClick();
+    };
+    
+    // Add back the kioskSelectionOptions
+    const kioskSelectionOptions = [
+        { value: 'Kiosk', label: 'Kiosk Standard' },
+        { value: 'KioskSelf', label: 'Kiosk Self-Service' },
+        { value: 'KioskXPos', label: 'Kiosk XPos' }
+    ];
+
+    // Now the menu2 definition can reference handleKioskClick properly
     const menu2 = (
         <Menu>
-            <Menu.Item key="exportExcel" onClick={exportExcel}>
-                Esporta file Excel
+            <Menu.Item key="todayOrders" onClick={handleTodayOrdersClick}>
+                Ordini Odierni
             </Menu.Item>
-            <Menu.Divider />
-            <Menu.Item key="selectColumns" onClick={() => setIsColumnSelectorVisible(true)}>
+            <Menu.Item key="simulateOrder" onClick={() => setIsSimulationModalVisible(true)}>
+                Simula Ordine
+            </Menu.Item>
+            <Menu.Item key="showKiosk" onClick={handleKioskClick}>
+                Visualizza Kiosk
+            </Menu.Item>
+            <Menu.Item key="exportExcel" onClick={exportExcel}>
+                Export Excel
+            </Menu.Item>
+            <Menu.Item key="columnSelector" onClick={() => setIsColumnSelectorVisible(true)}>
                 Seleziona Colonne
             </Menu.Item>
-            <Menu.Divider />
-            <Menu.Item
-                key="todayOrders"
-                onClick={() => {
-                    handleTodayOrdersClick();
-                }}
-            >
-                Visualizza ordini inseriti oggi
-            </Menu.Item>
-            <Menu.Divider />
-            <Menu.Item
-                key="simulationOrder"
-                onClick={() => {
-                    setIsSimulationModalVisible(true);
-                }}
-            >
-                Simulazione ordine
-            </Menu.Item>
-            <Menu.Divider />
-
-            <div style={{padding: "5px 12px"}}>            
-                <Switch
-                checked={hideZeroRows}
-                onChange={nascondiRighe}
-                title="Filtra"
-                checkedChildren={<CheckOutlined />}
-                unCheckedChildren={<CloseOutlined />}
-            /> 
-                <div style={{marginLeft:"10px", display:"inline"}}>Nascondi righe senza movimenti</div>
-                </div>
         </Menu>
     );
-
-
-
-
-
 
     const columns = [
         {
@@ -1613,10 +1725,142 @@ const ArticlesTable = () => {
             </div>
         );
     };
-    // Inside your ArticlesTable component
+    
+    // Update the Kiosk modal render function to better handle placeholders and use the same styling as main table
+    const renderKioskModal = () => {
+        // Filter the kioskData based on user input if there's a filter value
+        const filteredKioskData = kioskFilter 
+            ? kioskData.filter(item => 
+                item.c_articolo.toLowerCase().includes(kioskFilter.toLowerCase()) ||
+                item.d_articolo.toLowerCase().includes(kioskFilter.toLowerCase())
+              )
+            : kioskData;
+            
+        // Count real articles vs placeholders
+        const placeholderCount = kioskData.filter(item => item.isPlaceholder).length;
+        const realCount = kioskData.length - placeholderCount;
 
+        // Create columns with modified render functions to highlight placeholders
+        const kioskColumns = columns.map(col => {
+            // Special rendering for c_articolo and d_articolo columns to highlight placeholders
+            if (col.dataIndex === 'c_articolo' || col.dataIndex === 'd_articolo') {
+                return {
+                    ...col,
+                    render: (text, record) => {
+                        if (record.isPlaceholder) {
+                            return (
+                                <span style={{ color: '#ff4d4f', fontStyle: 'italic' }}>
+                                    {text} {col.dataIndex === 'c_articolo' && 
+                                    <Tag color="error" style={{ marginLeft: 4 }}>Non trovato</Tag>}
+                                </span>
+                            );
+                        }
+                        return col.render ? col.render(text, record) : text;
+                    }
+                };
+            }
+            // For numeric fields in placeholders, show dash instead of zero
+            if (['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 
+                 'giac_d60', 'giac_d81', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                 'off_mc', 'off_ms', 'off_msa', 'off_mss'].includes(col.dataIndex)) {
+                return {
+                    ...col,
+                    render: (text, record) => {
+                        if (record.isPlaceholder) {
+                            return <span style={{ color: '#8c8c8c' }}>-</span>;
+                        }
+                        return col.render ? col.render(text, record) : text;
+                    }
+                };
+            }
+            return col;
+        });
 
-
+        return (
+            <Modal
+                title={`Dettaglio Articoli ${selectedKiosk}`}
+                visible={isKioskModalVisible}
+                onCancel={() => {
+                    setIsKioskModalVisible(false);
+                    setKioskFilter('');
+                }}
+                footer={null}
+                width="100%"
+                style={{ top: 0 }}
+                bodyStyle={{ height: 'calc(100vh - 57px)', overflow: 'auto' }}
+            >
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+                    <div>
+                        <Select
+                            value={selectedKiosk}
+                            onChange={value => setSelectedKiosk(value)}
+                            style={{ width: 200, marginRight: 8 }}
+                            options={kioskSelectionOptions}
+                        />
+                        <Button type="primary" onClick={handleUpdateKioskData} style={{ marginRight: 8 }}>Aggiorna</Button>
+                        <Button onClick={() => setKioskFilter('')} disabled={!kioskFilter}>
+                            Reset Filtri
+                        </Button>
+                    </div>
+                    <div>
+                        <Input.Search
+                            placeholder="Filtra per codice o descrizione"
+                            value={kioskFilter}
+                            onChange={e => setKioskFilter(e.target.value)}
+                            style={{ width: 300 }}
+                            allowClear
+                        />
+                    </div>
+                </div>
+                
+                {kioskData.length === 0 ? (
+                    <Alert
+                        message="Nessun articolo Kiosk trovato"
+                        description="Verifica che i codici articolo Kiosk siano presenti nei dati caricati nella tabella principale."
+                        type="warning"
+                        showIcon
+                        style={{ marginBottom: 16 }}
+                    />
+                ) : (
+                    <Alert 
+                        message={
+                            <div>
+                                <span>Mostrati {filteredKioskData.length} articoli</span>
+                                {placeholderCount > 0 && (
+                                    <span style={{ marginLeft: 8 }}>
+                                        ({realCount > 0 ? `${realCount} trovati, ` : ''}{placeholderCount} non trovati)
+                                    </span>
+                                )}
+                                {kioskFilter && <span style={{ marginLeft: 8 }}>(filtrati)</span>}
+                            </div>
+                        }
+                        description={
+                            placeholderCount > 0 && 
+                            "Gli articoli in rosso sono codici non trovati nel database. Verificare i codici o aggiornare la lista predefinita."
+                        }
+                        type={placeholderCount > 0 ? "warning" : "info"} 
+                        showIcon 
+                        style={{ marginBottom: 16 }}
+                    />
+                )}
+                
+                <div className="table-container" style={{ height: 'calc(90vh - 170px)' }}>
+                    <Table
+                        bordered
+                        columns={kioskColumns}
+                        dataSource={filteredKioskData}
+                        rowKey="c_articolo"
+                        scroll={{ x: 1600, y: 650 }}
+                        size="small"
+                        pagination={false}
+                        virtual
+                        locale={{ emptyText: 'Nessun dato disponibile' }}
+                        rowClassName={record => record.isPlaceholder ? 'placeholder-row' : ''}
+                    />
+                </div>
+            </Modal>
+        );
+    };
 
     return (
         <>
@@ -1652,8 +1896,8 @@ const ArticlesTable = () => {
                     <div
                         style={{
                             position: "fixed",
-                            top: contextMenuPosition.y,
-                            left: contextMenuPosition.x,
+                            top: contextMenuPosition.top,
+                            left: contextMenuPosition.left,
                             zIndex: 1000,
                             background: "#fff",
                             boxShadow: "0px 0px 6px rgba(0,0,0,0.2)",
@@ -1932,6 +2176,9 @@ const ArticlesTable = () => {
                         )}
                     </div>
                 </Modal>
+
+                {/* Kiosk Modal */}
+                {renderKioskModal()}
 
             </div>
         </>

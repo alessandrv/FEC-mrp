@@ -1491,7 +1491,7 @@ async def get_article_disponibilita():
         cursor = conn.cursor()
         
         # Prepare the query
-        query = '''select * from products_availability'''
+        query = '''select * from products_availability where is_hub = 0'''
         
         # Execute the query with the article code parameter
         cursor.execute(query,)        
