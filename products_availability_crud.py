@@ -32,7 +32,7 @@ async def get_article_disponibilita():
         cursor = conn.cursor()
         
         # Prepare the query
-        query = '''SELECT * FROM products_availability ORDER BY posizione'''
+        query = '''SELECT * FROM products_availability where is_hub = 1 ORDER BY posizione'''
         
         # Execute the query
         cursor.execute(query)
@@ -150,7 +150,7 @@ async def update_product_availability(request: Request):
         
         # Check if the record exists
         check_query = '''
-            SELECT COUNT(*) FROM products_availability 
+            SELECT COUNT(*) FROM products_availability where is_hub = 1
             WHERE posizione = ?
         '''
         
