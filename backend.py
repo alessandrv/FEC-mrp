@@ -1960,11 +1960,10 @@ async def get_report_groups():
             cursor.execute(query)
             results = cursor.fetchall()
             
-            if not results:
-                return []
-            
-            # Format the results
-            groups = [{"name": row[0]} for row in results]
+            # Only populate groups if we have results
+            if results:
+                # Format the results
+                groups = [{"name": row[0]} for row in results]
             
             total_time = time.time() - start_time
             print(f"Total execution time for getting report groups: {total_time} seconds")
@@ -1976,7 +1975,10 @@ async def get_report_groups():
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     finally:
         if cursor is not None:
-            cursor.close()
+            try:
+                cursor.close()
+            except Exception as e:
+                print(f"Error closing cursor: {str(e)}")
 
 @app.get("/report_groups/{name}/articles")
 async def get_report_group_articles(name: str):
@@ -2001,11 +2003,10 @@ async def get_report_group_articles(name: str):
             cursor.execute(query, (name,))
             results = cursor.fetchall()
             
-            if not results:
-                return []
-            
-            # Extract the article codes
-            article_codes = [row[0] for row in results]
+            # Only extract articles if results exist
+            if results:
+                # Extract the article codes
+                article_codes = [row[0] for row in results]
             
             total_time = time.time() - start_time
             print(f"Total execution time for getting articles in group {name}: {total_time} seconds")
@@ -2017,7 +2018,10 @@ async def get_report_group_articles(name: str):
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     finally:
         if cursor is not None:
-            cursor.close()
+            try:
+                cursor.close()
+            except Exception as e:
+                print(f"Error closing cursor: {str(e)}")
 
 class ReportGroupItem(BaseModel):
     name: str
@@ -2062,7 +2066,10 @@ async def add_to_report_group(item: ReportGroupItem):
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     finally:
         if cursor is not None:
-            cursor.close()
+            try:
+                cursor.close()
+            except Exception as e:
+                print(f"Error closing cursor: {str(e)}")
 
 @app.delete("/report_groups")
 async def delete_from_report_group(
@@ -2115,4 +2122,7 @@ async def delete_from_report_group(
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     finally:
         if cursor is not None:
-            cursor.close() 
+            try:
+                cursor.close()
+            except Exception as e:
+                print(f"Error closing cursor: {str(e)}") 
