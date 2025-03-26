@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 from contextlib import contextmanager
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 
 # Load environment variables
 load_dotenv()
@@ -1938,3 +1939,172 @@ and mpf_arti = ?
 ORDER BY occ_dtco asc
     """
 
+
+@app.get("/report_groups")
+async def get_report_groups():
+    """
+    Retrieves all unique report group names from the report_groups table.
+    
+    Returns:
+        A list of dictionaries, each containing a 'name' field with the unique group name.
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection_from_pool()
+        cursor = conn.cursor()
+        
+        # Query to get distinct group names
+        query = "SELECT DISTINCT name FROM report_groups ORDER BY name"
+        cursor.execute(query)
+        results = cursor.fetchall()
+        
+        if not results:
+            return []
+        
+        # Format the results
+        groups = [{"name": row[0]} for row in results]
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time for getting report groups: {total_time} seconds")
+        
+        return groups
+        
+    except Exception as e:
+        print(f"Error getting report groups: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+@app.get("/report_groups/{name}/articles")
+async def get_report_group_articles(name: str):
+    """
+    Retrieves all article codes for a specific report group.
+    
+    Args:
+        name: The name of the report group to retrieve articles for.
+        
+    Returns:
+        A list of article codes as strings.
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection_from_pool()
+        cursor = conn.cursor()
+        
+        # Query to get article codes for the specified group
+        query = "SELECT art_code FROM report_groups WHERE name = ? ORDER BY art_code"
+        cursor.execute(query, (name,))
+        results = cursor.fetchall()
+        
+        if not results:
+            return []
+        
+        # Extract the article codes
+        article_codes = [row[0] for row in results]
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time for getting articles in group {name}: {total_time} seconds")
+        
+        return article_codes
+        
+    except Exception as e:
+        print(f"Error getting articles for group {name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+class ReportGroupItem(BaseModel):
+    name: str
+    art_code: str
+
+@app.post("/report_groups")
+async def add_to_report_group(item: ReportGroupItem):
+    """
+    Adds an article to a report group. If the group doesn't exist, it creates a new group.
+    
+    Args:
+        item: A ReportGroupItem containing the group name and article code.
+        
+    Returns:
+        A message indicating the success of the operation.
+    """
+    cursor = None
+    try:
+        conn = get_connection_from_pool()
+        cursor = conn.cursor()
+        
+        # Check if the entry already exists
+        check_query = "SELECT COUNT(*) FROM report_groups WHERE name = ? AND art_code = ?"
+        cursor.execute(check_query, (item.name, item.art_code))
+        count = cursor.fetchone()[0]
+        
+        if count > 0:
+            return {"message": f"Article {item.art_code} is already in group {item.name}"}
+        
+        # Insert the new entry
+        insert_query = "INSERT INTO report_groups (name, art_code) VALUES (?, ?)"
+        cursor.execute(insert_query, (item.name, item.art_code))
+        conn.commit()
+        
+        return {"message": f"Article {item.art_code} added to group {item.name}"}
+        
+    except Exception as e:
+        print(f"Error adding article to group: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+@app.delete("/report_groups")
+async def delete_from_report_group(
+    name: str, 
+    art_code: Optional[str] = None
+):
+    """
+    Removes an article from a report group, or deletes an entire group if no article code is provided.
+    
+    Args:
+        name: The name of the report group.
+        art_code: (Optional) The article code to remove. If not provided, the entire group is deleted.
+        
+    Returns:
+        A message indicating the success of the operation.
+    """
+    cursor = None
+    try:
+        conn = get_connection_from_pool()
+        cursor = conn.cursor()
+        
+        if art_code:
+            # Delete a specific article from the group
+            delete_query = "DELETE FROM report_groups WHERE name = ? AND art_code = ?"
+            cursor.execute(delete_query, (name, art_code))
+            conn.commit()
+            
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail=f"Article {art_code} not found in group {name}")
+                
+            return {"message": f"Article {art_code} removed from group {name}"}
+        else:
+            # Delete the entire group
+            delete_query = "DELETE FROM report_groups WHERE name = ?"
+            cursor.execute(delete_query, (name,))
+            conn.commit()
+            
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail=f"Group {name} not found")
+                
+            return {"message": f"Group {name} deleted"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error deleting from report group: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    finally:
+        if cursor is not None:
+            cursor.close() 
