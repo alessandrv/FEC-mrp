@@ -1,60 +1,59 @@
 # MRP Combined Application
 
-This application combines the backend.py and backend_availability.py FastAPI applications into a single instance to reduce CPU usage and simplify deployment.
+This application runs both backend.py and backend_availability.py FastAPI applications in the same process but preserves their separate ports to maintain security boundaries.
 
 ## Running the Combined Application
 
 To run the combined application, use the following command:
 
 ```bash
-python -m uvicorn main:app --host 172.16.16.27 --port 8000 --reload
-```
-
-Alternatively, you can execute the main.py file directly:
-
-```bash
 python main.py
 ```
 
-## API Endpoints
+This will start:
+- The backend API on port 8000 (http://172.16.16.27:8000)
+- The availability API on port 8001 (http://172.16.16.27:8001)
 
-The combined application mounts both APIs under different prefixes:
+Both will run in a single Python process, reducing overall CPU usage.
 
-- Original backend.py endpoints are available at `/api/...`
-- Original backend_availability.py endpoints are available at `/availability/...`
+## How It Works
 
-### Example URL Changes
+Unlike a traditional combined FastAPI application where APIs are mounted under different paths, this solution:
 
-Before:
-- `http://172.16.16.27:8000/articles`
-- `http://172.16.16.27:8001/article_history`
-
-After:
-- `http://172.16.16.27:8000/api/articles`
-- `http://172.16.16.27:8000/availability/article_history`
+1. Runs both FastAPI applications in their original form
+2. Uses asyncio to run both uvicorn servers in the same process
+3. Maintains the original port separation for security purposes
+4. Shares resources like the connection pool where possible
 
 ## Benefits
 
-1. **Reduced CPU Usage**: Running a single uvicorn process instead of two
-2. **Simplified Deployment**: Only one service to manage
-3. **Common Connection Pool**: Both applications can share the same database connection pool
-4. **Easier Maintenance**: All code runs together for easier debugging
+1. **Reduced CPU Usage**: Running in a single process instead of two separate processes
+2. **Maintained Security**: Preserves the original port separation (8001 remains externally exposed)
+3. **No URL Changes Required**: All existing endpoints work with their original URLs
+4. **Shared Resources**: Both applications can share common resources and connection pools
+5. **Simple Administration**: Both applications start and stop together
 
-## Updating the Frontend
+## Frontend Applications
 
-If you have frontend applications that connect to these APIs, you'll need to update the URLs to include the new prefixes.
+No changes to frontend applications are required! All URLs remain the same:
 
-Example changes:
-- From: `fetch('http://172.16.16.27:8000/articles')`
-- To: `fetch('http://172.16.16.27:8000/api/articles')`
-
-- From: `fetch('http://172.16.16.27:8001/article_history')`
-- To: `fetch('http://172.16.16.27:8000/availability/article_history')`
+- Backend endpoints: `http://172.16.16.27:8000/...`
+- Availability endpoints: `http://172.16.16.27:8001/...`
 
 ## Troubleshooting
 
 If you encounter any issues:
 
 1. Make sure both backend.py and backend_availability.py are in the same directory as main.py
-2. Check for any endpoint naming conflicts between the two applications
-3. Verify that frontend applications have been updated to use the new URL prefixes
+2. Check that the correct Python executable is being used in run_server.bat
+3. Verify that no other process is already using port 8000 or 8001
+4. Look for any import errors in the console output
+
+## Reverting to Separate Processes
+
+If needed, you can still run both applications separately using the original commands:
+
+```bash
+python -m uvicorn backend:app --host 172.16.16.27 --reload --port 8000
+python -m uvicorn backend_availability:app --host 172.16.16.27 --reload --port 8001
+```

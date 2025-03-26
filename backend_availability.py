@@ -524,7 +524,6 @@ and  amg_stat = 'D'
 and nvl(amg_fagi,'S') = 'S'
         and ({code_conditions})
         """
-        print(availability_query)
         
         cursor.execute(availability_query)
         results = cursor.fetchall()
@@ -623,8 +622,17 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
         article_columns = [column[0] for column in cursor.description]
         article_data = [dict(zip(article_columns, article)) for article in articles]
         
+        # Debug: Print the first few article codes
+        print(f"First 5 article codes from products_availability: {[article.get('codice', 'N/A') for article in article_data[:5]]}")
+        
         # Create a mapping of article codes to their original data for later merging
-        article_mapping = {article['codice']: article for article in article_data if 'codice' in article}
+        # Standardize keys by trimming whitespace and converting to uppercase
+        article_mapping = {}
+        for article in article_data:
+            if 'codice' in article and article['codice']:
+                # Standardize the code by trimming and converting to uppercase
+                std_code = article['codice'].strip().upper()
+                article_mapping[std_code] = article
         
         # Extract article codes and create the OR condition for the next query
         article_codes = list(article_mapping.keys())
@@ -637,10 +645,13 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
         
         # 2. Build a single query to get availability data for all articles at once
         # Create the OR condition part of the query
-        code_conditions = " OR ".join([f"amg_code = '{code}'" for code in article_codes])
+        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in article_codes])
+        
+        # Debug: Print the first part of the conditions 
+        print(f"Sample of SQL conditions (first 100 chars): {code_conditions[:100]}...")
         
         availability_query = f"""
-        select amg_code c_articolo, amg_dest d_articolo,
+        select TRIM(amg_code) c_articolo, amg_dest d_articolo,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 1) giac_d01,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 20) giac_d20,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 32) giac_d32,
@@ -650,7 +661,7 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 81) giac_d81,
 (select round(dep_qgiai+dep_qcar-dep_qsca+dep_qord+dep_qorp-dep_qpre-dep_qprp,0) from mgdepo 
   where dep_arti = amg_code and dep_code = 1) 
-- (select sum(mpf_qfab) from mpfabbi, mpordil where mpf_ordl = mol_code and mpf_feva = 'N' and mol_stato = 'P'
+- (select NVL(sum(mpf_qfab), 0) from mpfabbi, mpordil where mpf_ordl = mol_code and mpf_feva = 'N' and mol_stato = 'P'
 and mpf_arti = amg_code)
 disp_d01,
 nvl((select sum(occ_qmov) from ocordic, ocordit where occ_arti = amg_code -- and occ_tipo in ('O','P','Q')
@@ -730,15 +741,29 @@ and nvl(amg_fagi,'S') = 'S'
         cursor.execute(availability_query)
         results = cursor.fetchall()
         
+        # Debug: Print number of availability results found
+        print(f"Availability query returned {len(results)} rows")
+        
         # Get column names and convert to list of dictionaries
         result_columns = [column[0] for column in cursor.description]
         availability_data = [dict(zip(result_columns, row)) for row in results]
         
         # Create a mapping of article codes to availability data
+        # Also standardize these keys to avoid mismatches
         availability_mapping = {}
         for item in availability_data:
-            if 'c_articolo' in item:
-                availability_mapping[item['c_articolo']] = item
+            if 'c_articolo' in item and item['c_articolo']:
+                # Standardize the code by trimming and converting to uppercase
+                std_code = item['c_articolo'].strip().upper()
+                availability_mapping[std_code] = item
+                
+        # Debug: Print the first few article codes from availability data
+        avail_codes = list(availability_mapping.keys())
+        print(f"First 5 article codes from availability: {avail_codes[:5] if avail_codes else 'None'}")
+        
+        # Debug: Check for key overlaps
+        overlap_count = sum(1 for code in article_mapping if code in availability_mapping)
+        print(f"Found {overlap_count} articles with matching availability data out of {len(article_mapping)} total articles")
         
         # Combine the original article data with the availability data
         combined_data = []
@@ -762,7 +787,7 @@ and nvl(amg_fagi,'S') = 'S'
         # Make sure all numeric fields are properly initialized
         for article in combined_data:
             for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
-                         'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                         'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
                          'off_mc', 'off_ms', 'off_msa', 'off_mss']:
                 if field not in article or article[field] is None:
                     article[field] = 0
@@ -776,7 +801,10 @@ and nvl(amg_fagi,'S') = 'S'
         return JSONResponse(content=jsonable_encoder(combined_data))
         
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Error in get_articles_commerciali: {str(e)}")
+        print(f"Error details: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
     finally:
         if cursor is not None:
