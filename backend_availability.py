@@ -593,7 +593,11 @@ and nvl(amg_fagi,'S') = 'S'
                     # Sum the values from individual parts
                     for part in individual_parts:
                         if part in availability_mapping:
-                            combined_item[field] += float(availability_mapping[part].get(field, 0))
+                            # Get the value, defaulting to 0 if None or missing
+                            value = availability_mapping[part].get(field)
+                            if value is not None:
+                                combined_item[field] += float(value)
+                            # If value is None, we don't add anything (implicitly add 0)
                 
                 combined_data.append(combined_item)
             
@@ -913,7 +917,11 @@ and nvl(amg_fagi,'S') = 'S'
                     # Sum the values from individual parts
                     for part in individual_parts:
                         if part in availability_mapping:
-                            combined_item[field] += float(availability_mapping[part].get(field, 0))
+                            # Get the value, defaulting to 0 if None or missing
+                            value = availability_mapping[part].get(field)
+                            if value is not None:
+                                combined_item[field] += float(value)
+                            # If value is None, we don't add anything (implicitly add 0)
                 
                 combined_data.append(combined_item)
             
