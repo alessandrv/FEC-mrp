@@ -409,36 +409,37 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
         # Create a mapping of article codes to their original data for later merging
         # Standardize keys by trimming whitespace and converting to uppercase
         article_mapping = {}
+        shared_code_parts = {}  # Keep track of which individual codes belong to shared codes
+
         for article in article_data:
             if 'codice' in article and article['codice']:
-                # Check if the code contains commas
                 article_code = article['codice'].strip().upper()
+                
+                # Always add the original code to the mapping
+                article_mapping[article_code] = article
+                
+                # If it contains commas, also track the individual parts
                 if ',' in article_code:
-                    # For shared articles with comma-separated codes, split and process each
                     individual_codes = [code.strip().upper() for code in article_code.split(',')]
-                    for individual_code in individual_codes:
-                        # Store reference to original shared code for later aggregation
-                        if individual_code not in article_mapping:
-                            # Create a copy to avoid modifying the original
+                    # Remember which parts belong to this shared code
+                    shared_code_parts[article_code] = individual_codes
+                    
+                    # Add individual codes to query separately
+                    for ind_code in individual_codes:
+                        if ind_code not in article_mapping:  # Don't overwrite existing entries
                             article_copy = article.copy()
-                            article_copy['shared_with'] = article_code  # Mark as part of a shared code
-                            article_mapping[individual_code] = article_copy
-                else:
-                    # Handle regular single codes as before
-                    article_mapping[article_code] = article
-        
-        # Extract article codes and create the OR condition for the next query
-        article_codes = list(article_mapping.keys())
-        
-        if not article_codes:
-            return JSONResponse(
-                content={"message": "No valid article codes found."},
-                status_code=404
-            )
-        
-        # 2. Build a single query to get availability data for all articles at once
-        # Create the OR condition part of the query
-        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in article_codes])
+                            article_copy['part_of_shared'] = article_code
+                            article_mapping[ind_code] = article_copy
+
+        # Use ONLY the individual codes for querying (shared codes won't exist in the DB)
+        query_codes = []
+        for code in article_mapping:
+            # If this is not a shared code (with commas) OR this is an individual part
+            if ',' not in code:
+                query_codes.append(code)
+
+        # Now use query_codes for the SQL condition
+        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in query_codes])
         
         availability_query = f"""
         select TRIM(amg_code) c_articolo, amg_dest d_articolo,
@@ -557,23 +558,23 @@ and nvl(amg_fagi,'S') = 'S'
 
         for code, article in article_mapping.items():
             # Check if this is part of a shared code and if we've already processed it
-            if 'shared_with' in article and article['shared_with'] in processed_shared_codes:
+            if 'part_of_shared' in article and article['part_of_shared'] in processed_shared_codes:
                 continue
                 
-            if 'shared_with' in article:
+            if 'part_of_shared' in article:
                 # This is a shared code - we need to aggregate availability data
-                shared_code = article['shared_with']
+                shared_code = article['part_of_shared']
                 processed_shared_codes.add(shared_code)
                 
                 # Find all individual codes that are part of this shared code
                 shared_components = [c for c in article_mapping.keys() 
-                                     if 'shared_with' in article_mapping[c] and 
-                                        article_mapping[c]['shared_with'] == shared_code]
+                                     if 'part_of_shared' in article_mapping[c] and 
+                                        article_mapping[c]['part_of_shared'] == shared_code]
                                         
                 # Create a combined item starting with the shared code article
                 combined_item = article.copy()
                 # Remove the helper field
-                combined_item.pop('shared_with', None)
+                combined_item.pop('part_of_shared', None)
                 combined_item['codice'] = shared_code  # Restore the original combined code
                 
                 # Aggregate availability data for all components
@@ -708,36 +709,37 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
         # Create a mapping of article codes to their original data for later merging
         # Standardize keys by trimming whitespace and converting to uppercase
         article_mapping = {}
+        shared_code_parts = {}  # Keep track of which individual codes belong to shared codes
+
         for article in article_data:
             if 'codice' in article and article['codice']:
-                # Check if the code contains commas
                 article_code = article['codice'].strip().upper()
+                
+                # Always add the original code to the mapping
+                article_mapping[article_code] = article
+                
+                # If it contains commas, also track the individual parts
                 if ',' in article_code:
-                    # For shared articles with comma-separated codes, split and process each
                     individual_codes = [code.strip().upper() for code in article_code.split(',')]
-                    for individual_code in individual_codes:
-                        # Store reference to original shared code for later aggregation
-                        if individual_code not in article_mapping:
-                            # Create a copy to avoid modifying the original
+                    # Remember which parts belong to this shared code
+                    shared_code_parts[article_code] = individual_codes
+                    
+                    # Add individual codes to query separately
+                    for ind_code in individual_codes:
+                        if ind_code not in article_mapping:  # Don't overwrite existing entries
                             article_copy = article.copy()
-                            article_copy['shared_with'] = article_code  # Mark as part of a shared code
-                            article_mapping[individual_code] = article_copy
-                else:
-                    # Handle regular single codes as before
-                    article_mapping[article_code] = article
-        
-        # Extract article codes and create the OR condition for the next query
-        article_codes = list(article_mapping.keys())
-        
-        if not article_codes:
-            return JSONResponse(
-                content={"message": "No valid article codes found."},
-                status_code=404
-            )
-        
-        # 2. Build a single query to get availability data for all articles at once
-        # Create the OR condition part of the query
-        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in article_codes])
+                            article_copy['part_of_shared'] = article_code
+                            article_mapping[ind_code] = article_copy
+
+        # Use ONLY the individual codes for querying (shared codes won't exist in the DB)
+        query_codes = []
+        for code in article_mapping:
+            # If this is not a shared code (with commas) OR this is an individual part
+            if ',' not in code:
+                query_codes.append(code)
+
+        # Now use query_codes for the SQL condition
+        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in query_codes])
         
         # Debug: Print the first part of the conditions 
         print(f"Sample of SQL conditions (first 100 chars): {code_conditions[:100]}...")
@@ -864,23 +866,23 @@ and nvl(amg_fagi,'S') = 'S'
 
         for code, article in article_mapping.items():
             # Check if this is part of a shared code and if we've already processed it
-            if 'shared_with' in article and article['shared_with'] in processed_shared_codes:
+            if 'part_of_shared' in article and article['part_of_shared'] in processed_shared_codes:
                 continue
                 
-            if 'shared_with' in article:
+            if 'part_of_shared' in article:
                 # This is a shared code - we need to aggregate availability data
-                shared_code = article['shared_with']
+                shared_code = article['part_of_shared']
                 processed_shared_codes.add(shared_code)
                 
                 # Find all individual codes that are part of this shared code
                 shared_components = [c for c in article_mapping.keys() 
-                                     if 'shared_with' in article_mapping[c] and 
-                                        article_mapping[c]['shared_with'] == shared_code]
+                                     if 'part_of_shared' in article_mapping[c] and 
+                                        article_mapping[c]['part_of_shared'] == shared_code]
                                         
                 # Create a combined item starting with the shared code article
                 combined_item = article.copy()
                 # Remove the helper field
-                combined_item.pop('shared_with', None)
+                combined_item.pop('part_of_shared', None)
                 combined_item['codice'] = shared_code  # Restore the original combined code
                 
                 # Aggregate availability data for all components
