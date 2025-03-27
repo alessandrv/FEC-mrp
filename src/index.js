@@ -7,6 +7,7 @@ import Inventory from "./Inventory";
 import InventoryList from "./InventoryList";
 import Dashboard from "./Dashboard";
 import ProductsAvailability from "./ProductsAvailability";
+import ProductsAvailabilityCommerciali from "./ProductsAvailabilityCommerciali";
 ReactDOM.render(
   <Router>
     <Routes>
@@ -14,7 +15,7 @@ ReactDOM.render(
       <Route path="/understock" element={<UnderStock />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/availability" element={<ProductsAvailability />} />
-
+      <Route path="/availability_commerciali" element={<ProductsAvailabilityCommerciali />} />
     </Routes>
   </Router>,
   document.getElementById("root")

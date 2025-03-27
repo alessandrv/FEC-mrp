@@ -7,8 +7,9 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities';
 import axios from 'axios';
 import './ProductsAvailability.css';
-import { API_BASE_URL } from './config'; // Import configuration
-const ProductsAvailability = () => {
+import { API_BASE_URL, WEBSOCKET_URL } from './config'; // Import configuration
+
+const ProductsAvailabilityCommerciali = () => {
   // State for products data
   const [dataSource, setDataSource] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +41,7 @@ const ProductsAvailability = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/get_disponibilita_articoli`);
+      const response = await axios.get(`${API_BASE_URL}/get_disponibilita_articoli_commerciali`);
       setDataSource(response.data);
       setLoading(false);
     } catch (error) {
@@ -55,7 +56,7 @@ const ProductsAvailability = () => {
   const saveData = async (itemA, itemB) => {
     try {
       // Send only the two items to swap positions
-      const response = await axios.put(`${API_BASE_URL}/update_disponibilita_articoli_order`, [itemA, itemB]);
+      const response = await axios.put(`${API_BASE_URL}/update_disponibilita_articoli_order_commerciali`, [itemA, itemB]);
       
       // Fetch the updated data to ensure UI is in sync with backend
       fetchData();
@@ -158,7 +159,7 @@ const ProductsAvailability = () => {
       if (editingRecord) {
         // Update existing record via API
         try {
-          await axios.put(`${API_BASE_URL}/update_disponibilita_articolo`, values);
+          await axios.put(`${API_BASE_URL}/update_disponibilita_articolo_commerciali`, values);
           
           // Update local state
           newData = newData.map(item => 
@@ -174,7 +175,7 @@ const ProductsAvailability = () => {
       } else {
         // Add new record via API
         try {
-          await axios.post(`${API_BASE_URL}/add_disponibilita_articolo`, values);
+          await axios.post(`${API_BASE_URL}/add_disponibilita_articolo_commerciali`, values);
           
           // Add to local state
           newData.push(values);
@@ -206,7 +207,7 @@ const ProductsAvailability = () => {
     if (selectedRowForDelete) {
       try {
         // Delete record via API
-        await axios.delete(`${API_BASE_URL}/delete_disponibilita_articolo/${selectedRowForDelete.posizione}`);
+        await axios.delete(`${API_BASE_URL}/delete_disponibilita_articolo_commerciali/${selectedRowForDelete.posizione}`);
         
         // Update local state
         const newData = dataSource.filter(
@@ -517,4 +518,4 @@ const ProductsAvailability = () => {
   );
 };
 
-export default ProductsAvailability;
+export default ProductsAvailabilityCommerciali;

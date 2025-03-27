@@ -64,9 +64,55 @@ async def get_article_disponibilita():
         if cursor is not None:
             cursor.close()
 
+
+# Get all products
+@router.get("/get_disponibilita_articoli_commerciali")
+async def get_article_disponibilita_commerciali():
+    """
+    Retrieves all products from the availability table.
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Prepare the query
+        query = '''SELECT * FROM products_availability where is_hub = 0 ORDER BY posizione'''
+        
+        # Execute the query
+        cursor.execute(query)
+        
+        # Fetch all results
+        rows = cursor.fetchall()
+        
+        # Check if any rows were returned
+        if not rows:
+            return JSONResponse(
+                content={"message": "No products found."},
+                status_code=404
+            )
+        
+        # Convert the results to a list of dictionaries
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in rows]
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time for get_disponibilita_articoli: {total_time} seconds")
+        
+        # Return the results as JSON
+        return JSONResponse(content=jsonable_encoder(results))
+        
+    except Exception as e:
+        print(f"Error getting products: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
 # Add a new product
-@router.post("/add_disponibilita_articolo")
-async def add_product_availability(request: Request):
+@router.post("/add_disponibilita_articolo_commerciali")
+async def add_product_availability_commerciali(request: Request):
     """
     Add a new product to the availability table
     """
@@ -95,7 +141,7 @@ async def add_product_availability(request: Request):
         query = '''
             INSERT INTO products_availability 
             (posizione, codice, descrizione, is_hub) 
-            VALUES (?, ?, ?, 1)
+            VALUES (?, ?, ?, 0)
         '''
         
         cursor.execute(query, (posizione, codice, descrizione))
@@ -150,8 +196,8 @@ async def update_product_availability(request: Request):
         
         # Check if the record exists
         check_query = '''
-            SELECT COUNT(*) FROM products_availability where is_hub = 1
-            WHERE posizione = ?
+            SELECT COUNT(*) FROM products_availability 
+            WHERE posizione = ? and is_hub = 1
         '''
         
         cursor.execute(check_query, (posizione,))
@@ -167,7 +213,73 @@ async def update_product_availability(request: Request):
         update_query = '''
             UPDATE products_availability 
             SET codice = ?, descrizione = ? 
-            WHERE posizione = ?
+            WHERE posizione = ? and is_hub = 1
+        '''
+        
+        cursor.execute(update_query, (codice, descrizione, posizione))
+        conn.commit()
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time for update_disponibilita_articolo: {total_time} seconds")
+        
+        return JSONResponse(
+            content={"message": "Product updated successfully"},
+            status_code=200
+        )
+        
+    except Exception as e:
+        print(f"Error updating product: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+@router.put("/update_disponibilita_articolo_commerciali")
+async def update_product_availability_commerciali(request: Request):
+    """
+    Update an existing product in the availability table
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        # Get the request body
+        body = await request.json()
+        
+        # Extract data from the request
+        posizione = body.get('posizione')
+        codice = body.get('codice')
+        descrizione = body.get('descrizione')
+        
+        # Validate required fields
+        if not all([posizione, codice, descrizione]):
+            return JSONResponse(
+                content={"message": "All fields (posizione, codice, descrizione) are required"},
+                status_code=400
+            )
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Check if the record exists
+        check_query = '''
+            SELECT COUNT(*) FROM products_availability 
+            WHERE posizione = ? and is_hub = 0
+        '''
+        
+        cursor.execute(check_query, (posizione,))
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            return JSONResponse(
+                content={"message": "Product not found"},
+                status_code=404
+            )
+        print("CIAO")
+        # Update the record
+        update_query = '''
+            UPDATE products_availability 
+            SET codice = ?, descrizione = ? 
+            WHERE posizione = ? and is_hub = 0
         '''
         
         cursor.execute(update_query, (codice, descrizione, posizione))
@@ -204,7 +316,7 @@ async def delete_product_availability(posizione: int):
         # Check if the record exists
         check_query = '''
             SELECT COUNT(*) FROM products_availability 
-            WHERE posizione = ?
+            WHERE posizione = ? and is_hub = 1
         '''
         
         cursor.execute(check_query, (posizione,))
@@ -223,7 +335,7 @@ async def delete_product_availability(posizione: int):
             # Delete the record
             delete_query = '''
                 DELETE FROM products_availability 
-                WHERE posizione = ?
+                WHERE posizione = ? and is_hub = 1
             '''
             
             cursor.execute(delete_query, (posizione,))
@@ -232,7 +344,7 @@ async def delete_product_availability(posizione: int):
             renumber_query = '''
                 UPDATE products_availability 
                 SET posizione = posizione - 1 
-                WHERE posizione > ?
+                WHERE posizione > ? and is_hub = 1
             '''
             
             cursor.execute(renumber_query, (posizione,))
@@ -262,6 +374,83 @@ async def delete_product_availability(posizione: int):
     finally:
         if cursor is not None:
             cursor.close()
+
+# Delete a product
+@router.delete("/delete_disponibilita_articolo_commerciali/{posizione}")
+async def delete_product_availability_commerciali(posizione: int):
+    """
+    Delete a product from the availability table
+    """
+    start_time = time.time()
+    cursor = None
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Check if the record exists
+        check_query = '''
+            SELECT COUNT(*) FROM products_availability 
+            WHERE posizione = ? and is_hub = 0
+        '''
+        
+        cursor.execute(check_query, (posizione,))
+        count = cursor.fetchone()[0]
+        
+        if count == 0:
+            return JSONResponse(
+                content={"message": "Product not found"},
+                status_code=404
+            )
+        
+        # Start a transaction
+        conn.autocommit = False
+        
+        try:
+            # Delete the record
+            delete_query = '''
+                DELETE FROM products_availability 
+                WHERE posizione = ? and is_hub = 0
+            '''
+            
+            cursor.execute(delete_query, (posizione,))
+            
+            # Renumber positions
+            renumber_query = '''
+                UPDATE products_availability 
+                SET posizione = posizione - 1 
+                WHERE posizione > ? and is_hub = 0
+            '''
+            
+            cursor.execute(renumber_query, (posizione,))
+            
+            # Commit the transaction
+            conn.commit()
+            
+        except Exception as e:
+            # Rollback in case of error
+            conn.rollback()
+            raise e
+        finally:
+            # Reset autocommit
+            conn.autocommit = True
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time for delete_disponibilita_articolo: {total_time} seconds")
+        
+        return JSONResponse(
+            content={"message": "Product deleted successfully"},
+            status_code=200
+        )
+        
+    except Exception as e:
+        print(f"Error deleting product: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
+
 
 # Update the order of products
 @router.put("/update_disponibilita_articoli_order")
@@ -310,19 +499,19 @@ async def update_product_availability_order(request: Request):
             
             # Step 1: Temporarily set product A's key to maxint
             cursor.execute(
-                "UPDATE products_availability SET posizione = ? WHERE posizione = ?",
+                "UPDATE products_availability SET posizione = ? WHERE posizione = ? and is_hub = 1",
                 (maxint, posA)
             )
             
             # Step 2: Set product B's key to product A's original position
             cursor.execute(
-                "UPDATE products_availability SET posizione = ? WHERE posizione = ?",
+                "UPDATE products_availability SET posizione = ? WHERE posizione = ? and is_hub = 1",
                 (posA, posB)
             )
             
             # Step 3: Set the product with the temporary key (maxint) to product B's original position
             cursor.execute(
-                "UPDATE products_availability SET posizione = ? WHERE posizione = ?",
+                "UPDATE products_availability SET posizione = ? WHERE posizione = ? and is_hub = 1",
                 (posB, maxint)
             )
             
@@ -352,98 +541,80 @@ async def update_product_availability_order(request: Request):
         if cursor is not None:
             cursor.close()
 
+   
+
+# Update the order of products
+@router.put("/update_disponibilita_articoli_order_commerciali")
+async def update_product_availability_order_commerciali(request: Request):
     """
-    Update the order of products in the availability table
+    Update the order of products in the availability table by swapping the positions of two products.
+    This version uses Informix syntax and swaps the keys by setting one of them to maxint temporarily.
     """
+    import time
     start_time = time.time()
     cursor = None
     conn = None
     try:
-        # Get the request body which should be an array of products with positions
+        # Expect exactly two products to swap
         body = await request.json()
-        
         if not isinstance(body, list):
             return JSONResponse(
                 content={"message": "Request body must be an array of products"},
                 status_code=400
             )
-            
-        if len(body) == 0:
+        if len(body) != 2:
             return JSONResponse(
-                content={"message": "Request body cannot be empty"},
+                content={"message": "Request body must contain exactly 2 products"},
+                status_code=400
+            )
+        
+        # Retrieve the two positions to swap
+        posA = body[0].get('posizione')
+        posB = body[1].get('posizione')
+        
+        if posA is None or posB is None:
+            return JSONResponse(
+                content={"message": "Each product must have a 'posizione' field"},
                 status_code=400
             )
         
         conn = get_connection()
         cursor = conn.cursor()
         
-        # Start a transaction
+        # Start transaction
         conn.autocommit = False
         
         try:
-            # Create a temporary table for the reordering
-            cursor.execute('''
-                IF OBJECT_ID('tempdb..#temp_positions') IS NOT NULL
-                    DROP TABLE #temp_positions
-                
-                CREATE TABLE #temp_positions (
-                    old_position INT,
-                    new_position INT
-                )
-            ''')
+            # Define maxint value (assuming the 'posizione' column is an INTEGER)
+            maxint = 2147483647
             
-            # Insert the new ordering into the temporary table
-            for i, item in enumerate(body, 1):
-                old_position = item.get('posizione')
-                if not old_position:
-                    raise ValueError("Each item must have a 'posizione' field")
-                
-                cursor.execute(
-                    'INSERT INTO #temp_positions (old_position, new_position) VALUES (?, ?)',
-                    (old_position, i)
-                )
+            # Step 1: Temporarily set product A's key to maxint
+            cursor.execute(
+                "UPDATE products_availability SET posizione = ? WHERE posizione = ? and is_hub = 0",
+                (maxint, posA)
+            )
             
-            # Create a temporary holding table for the actual records
-            cursor.execute('''
-                IF OBJECT_ID('tempdb..#temp_records') IS NOT NULL
-                    DROP TABLE #temp_records
-                
-                SELECT 
-                    p.posizione,
-                    p.codice,
-                    p.descrizione,
-                    t.new_position
-                INTO #temp_records
-                FROM products_availability p
-                JOIN #temp_positions t ON p.posizione = t.old_position
-            ''')
+            # Step 2: Set product B's key to product A's original position
+            cursor.execute(
+                "UPDATE products_availability SET posizione = ? WHERE posizione = ? and is_hub = 0",
+                (posA, posB)
+            )
             
-            # Clear the original table
-            cursor.execute('DELETE FROM products_availability')
-            
-            # Insert the records back with their new positions
-            cursor.execute('''
-                INSERT INTO products_availability (posizione, codice, descrizione)
-                SELECT new_position, codice, descrizione
-                FROM #temp_records
-                ORDER BY new_position
-            ''')
-            
-            # Drop temporary tables
-            cursor.execute('''
-                DROP TABLE #temp_positions
-                DROP TABLE #temp_records
-            ''')
+            # Step 3: Set the product with the temporary key (maxint) to product B's original position
+            cursor.execute(
+                "UPDATE products_availability SET posizione = ? WHERE posizione = ? and is_hub = 0",
+                (posB, maxint)
+            )
             
             # Commit the transaction
             conn.commit()
             
         except Exception as e:
-            # Rollback in case of error
+            # Rollback in case of any error
             conn.rollback()
             raise e
         finally:
-            # Reset autocommit
+            # Reset autocommit mode
             conn.autocommit = True
         
         total_time = time.time() - start_time
@@ -460,6 +631,8 @@ async def update_product_availability_order(request: Request):
     finally:
         if cursor is not None:
             cursor.close()
+
+   
 
 # Get description for an article code
 @router.get("/get_article_description/{code}")

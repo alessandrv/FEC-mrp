@@ -282,51 +282,6 @@ and nvl(amg_fagi,'S') = 'S'
 and amg_code = ?
     """
 
-@app.get("/article_disponibilita")
-async def get_article_disponibilita(article_code: str, current_user: TokenData = Depends(get_current_user)):
-    """
-    Retrieves the availability data for a specific article code.
-    Protected by token authentication.
-    """
-    start_time = time.time()
-    cursor = None  # Initialize cursor to None
-    try:
-        conn = get_cached_connection()
-        cursor = conn.cursor()
-        
-        # Prepare the query
-        query = get_disponibilita_query()
-        
-        # Execute the query with the article code parameter
-        cursor.execute(query, (article_code,))
-        
-        # Fetch all results
-        rows = cursor.fetchall()
-        
-        # Check if any rows were returned
-        if not rows:
-            return JSONResponse(
-                content={"message": "Article not found."},
-                status_code=404
-            )
-        
-        # Convert the results to a list of dictionaries
-        columns = [column[0] for column in cursor.description]
-        results = [dict(zip(columns, row)) for row in rows]
-        
-        total_time = time.time() - start_time
-        print(f"Total execution time: {total_time} seconds")
-        
-        # Return the results as JSON
-        return JSONResponse(content=jsonable_encoder(results))
-        
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
-    finally:
-        if cursor is not None:
-            cursor.close()
-
 @app.get("/get_disponibilita_articoli_commerciali")
 async def get_disponibilita_articoli(current_user: TokenData = Depends(get_current_user)):
     """
@@ -456,9 +411,21 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
         article_mapping = {}
         for article in article_data:
             if 'codice' in article and article['codice']:
-                # Standardize the code by trimming and converting to uppercase
-                std_code = article['codice'].strip().upper()
-                article_mapping[std_code] = article
+                # Check if the code contains commas
+                article_code = article['codice'].strip().upper()
+                if ',' in article_code:
+                    # For shared articles with comma-separated codes, split and process each
+                    individual_codes = [code.strip().upper() for code in article_code.split(',')]
+                    for individual_code in individual_codes:
+                        # Store reference to original shared code for later aggregation
+                        if individual_code not in article_mapping:
+                            # Create a copy to avoid modifying the original
+                            article_copy = article.copy()
+                            article_copy['shared_with'] = article_code  # Mark as part of a shared code
+                            article_mapping[individual_code] = article_copy
+                else:
+                    # Handle regular single codes as before
+                    article_mapping[article_code] = article
         
         # Extract article codes and create the OR condition for the next query
         article_codes = list(article_mapping.keys())
@@ -585,22 +552,59 @@ and nvl(amg_fagi,'S') = 'S'
         
         # Combine the original article data with the availability data
         combined_data = []
+        # Track shared codes we've already processed
+        processed_shared_codes = set()
+
         for code, article in article_mapping.items():
-            if code in availability_mapping:
-                # Create a copy of the original article data
+            # Check if this is part of a shared code and if we've already processed it
+            if 'shared_with' in article and article['shared_with'] in processed_shared_codes:
+                continue
+                
+            if 'shared_with' in article:
+                # This is a shared code - we need to aggregate availability data
+                shared_code = article['shared_with']
+                processed_shared_codes.add(shared_code)
+                
+                # Find all individual codes that are part of this shared code
+                shared_components = [c for c in article_mapping.keys() 
+                                     if 'shared_with' in article_mapping[c] and 
+                                        article_mapping[c]['shared_with'] == shared_code]
+                                        
+                # Create a combined item starting with the shared code article
                 combined_item = article.copy()
-                # Add the availability data
-                combined_item.update(availability_mapping[code])
+                # Remove the helper field
+                combined_item.pop('shared_with', None)
+                combined_item['codice'] = shared_code  # Restore the original combined code
+                
+                # Aggregate availability data for all components
+                for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 
+                             'giac_d60', 'giac_d81', 'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 
+                             'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss', 'off_mc', 'off_ms', 
+                             'off_msa', 'off_mss']:
+                    # Sum the values from each component that has availability data
+                    combined_item[field] = sum(
+                        float(availability_mapping.get(comp, {}).get(field, 0)) 
+                        for comp in shared_components 
+                        if comp in availability_mapping
+                    )
                 combined_data.append(combined_item)
             else:
-                # If we didn't get availability data for this code, still include it but with zeros
-                combined_item = article.copy()
-                # Add empty availability fields
-                for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
-                             'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
-                             'off_mc', 'off_ms', 'off_msa', 'off_mss']:
-                    combined_item[field] = 0
-                combined_data.append(combined_item)
+                # Handle regular single codes as before
+                if code in availability_mapping:
+                    # Create a copy of the original article data
+                    combined_item = article.copy()
+                    # Add the availability data
+                    combined_item.update(availability_mapping[code])
+                    combined_data.append(combined_item)
+                else:
+                    # If we didn't get availability data for this code, still include it but with zeros
+                    combined_item = article.copy()
+                    # Add empty availability fields
+                    for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
+                                 'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                                 'off_mc', 'off_ms', 'off_msa', 'off_mss']:
+                        combined_item[field] = 0
+                    combined_data.append(combined_item)
         
         # Make sure all numeric fields are properly initialized and convert Decimal to float
         for article in combined_data:
@@ -706,9 +710,21 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
         article_mapping = {}
         for article in article_data:
             if 'codice' in article and article['codice']:
-                # Standardize the code by trimming and converting to uppercase
-                std_code = article['codice'].strip().upper()
-                article_mapping[std_code] = article
+                # Check if the code contains commas
+                article_code = article['codice'].strip().upper()
+                if ',' in article_code:
+                    # For shared articles with comma-separated codes, split and process each
+                    individual_codes = [code.strip().upper() for code in article_code.split(',')]
+                    for individual_code in individual_codes:
+                        # Store reference to original shared code for later aggregation
+                        if individual_code not in article_mapping:
+                            # Create a copy to avoid modifying the original
+                            article_copy = article.copy()
+                            article_copy['shared_with'] = article_code  # Mark as part of a shared code
+                            article_mapping[individual_code] = article_copy
+                else:
+                    # Handle regular single codes as before
+                    article_mapping[article_code] = article
         
         # Extract article codes and create the OR condition for the next query
         article_codes = list(article_mapping.keys())
@@ -778,7 +794,7 @@ and occ_feva = 'N'
 nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
   and mpf_dfab between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))),0) dom_ms,
  
-nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code --and occ_tipo in ('O','P','Q') 
+nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code -- and occ_tipo in ('O','P','Q') 
 and occ_feva = 'N'
   and occ_dtco between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))),0) +
 nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
@@ -843,22 +859,59 @@ and nvl(amg_fagi,'S') = 'S'
         
         # Combine the original article data with the availability data
         combined_data = []
+        # Track shared codes we've already processed
+        processed_shared_codes = set()
+
         for code, article in article_mapping.items():
-            if code in availability_mapping:
-                # Create a copy of the original article data
+            # Check if this is part of a shared code and if we've already processed it
+            if 'shared_with' in article and article['shared_with'] in processed_shared_codes:
+                continue
+                
+            if 'shared_with' in article:
+                # This is a shared code - we need to aggregate availability data
+                shared_code = article['shared_with']
+                processed_shared_codes.add(shared_code)
+                
+                # Find all individual codes that are part of this shared code
+                shared_components = [c for c in article_mapping.keys() 
+                                     if 'shared_with' in article_mapping[c] and 
+                                        article_mapping[c]['shared_with'] == shared_code]
+                                        
+                # Create a combined item starting with the shared code article
                 combined_item = article.copy()
-                # Add the availability data
-                combined_item.update(availability_mapping[code])
+                # Remove the helper field
+                combined_item.pop('shared_with', None)
+                combined_item['codice'] = shared_code  # Restore the original combined code
+                
+                # Aggregate availability data for all components
+                for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 
+                             'giac_d60', 'giac_d81', 'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 
+                             'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss', 'off_mc', 'off_ms', 
+                             'off_msa', 'off_mss']:
+                    # Sum the values from each component that has availability data
+                    combined_item[field] = sum(
+                        float(availability_mapping.get(comp, {}).get(field, 0)) 
+                        for comp in shared_components 
+                        if comp in availability_mapping
+                    )
                 combined_data.append(combined_item)
             else:
-                # If we didn't get availability data for this code, still include it but with zeros
-                combined_item = article.copy()
-                # Add empty availability fields
-                for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
-                             'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
-                             'off_mc', 'off_ms', 'off_msa', 'off_mss']:
-                    combined_item[field] = 0
-                combined_data.append(combined_item)
+                # Handle regular single codes as before
+                if code in availability_mapping:
+                    # Create a copy of the original article data
+                    combined_item = article.copy()
+                    # Add the availability data
+                    combined_item.update(availability_mapping[code])
+                    combined_data.append(combined_item)
+                else:
+                    # If we didn't get availability data for this code, still include it but with zeros
+                    combined_item = article.copy()
+                    # Add empty availability fields
+                    for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
+                                 'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                                 'off_mc', 'off_ms', 'off_msa', 'off_mss']:
+                        combined_item[field] = 0
+                    combined_data.append(combined_item)
         
         # Make sure all numeric fields are properly initialized and convert Decimal to float
         for article in combined_data:
