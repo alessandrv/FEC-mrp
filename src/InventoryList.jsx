@@ -1971,6 +1971,15 @@ const ArticlesTable = () => {
             <Menu.Item key="columnSelector" onClick={() => setIsColumnSelectorVisible(true)}>
                 Seleziona Colonne
             </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item key="toggleZeroRows">
+                <Checkbox 
+                    checked={!hideZeroRows} 
+                    onChange={() => setHideZeroRows(!hideZeroRows)}
+                >
+                    Mostra righe con tutti zeri
+                </Checkbox>
+            </Menu.Item>
         </Menu>
     );
 
