@@ -2,7 +2,6 @@
 .table-container {
     width: 100%;
     overflow-x: auto;
-    height: 90vh;
     overflow: auto;
 }
 
