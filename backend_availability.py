@@ -413,10 +413,11 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
 
         for article in article_data:
             if 'codice' in article and article['codice']:
+                # Standardize the code by trimming and converting to uppercase
                 article_code = article['codice'].strip().upper()
                 
                 # Always add the original code to the mapping
-                article_mapping[article_code] = article
+                article_mapping[article_code] = article.copy()
                 
                 # If it contains commas, also track the individual parts
                 if ',' in article_code:
@@ -431,15 +432,26 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
                             article_copy['part_of_shared'] = article_code
                             article_mapping[ind_code] = article_copy
 
-        # Use ONLY the individual codes for querying (shared codes won't exist in the DB)
-        query_codes = []
-        for code in article_mapping:
-            # If this is not a shared code (with commas) OR this is an individual part
-            if ',' not in code:
-                query_codes.append(code)
+        # Extract article codes and create the OR condition for the next query
+        # Use individual codes for comma-separated entries
+        article_codes = []
+        for code in article_mapping.keys():
+            if ',' not in code or code not in shared_code_parts:
+                article_codes.append(code)
+            else:
+                # For comma-separated codes, we've already added their parts to article_mapping
+                # We don't want to add the comma-separated code directly to the query
+                pass
 
-        # Now use query_codes for the SQL condition
-        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in query_codes])
+        if not article_codes:
+            return JSONResponse(
+                content={"message": "No valid article codes found."},
+                status_code=404
+            )
+
+        # 2. Build a single query to get availability data for all articles at once
+        # Create the OR condition part of the query
+        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in article_codes])
         
         availability_query = f"""
         select TRIM(amg_code) c_articolo, amg_dest d_articolo,
@@ -557,40 +569,40 @@ and nvl(amg_fagi,'S') = 'S'
         processed_shared_codes = set()
 
         for code, article in article_mapping.items():
-            # Check if this is part of a shared code and if we've already processed it
+            # Skip individual parts of shared codes that we've already processed
             if 'part_of_shared' in article and article['part_of_shared'] in processed_shared_codes:
                 continue
+            
+            # If this is a comma-separated code (original shared code)
+            if ',' in code and code in shared_code_parts:
+                processed_shared_codes.add(code)
                 
-            if 'part_of_shared' in article:
-                # This is a shared code - we need to aggregate availability data
-                shared_code = article['part_of_shared']
-                processed_shared_codes.add(shared_code)
-                
-                # Find all individual codes that are part of this shared code
-                shared_components = [c for c in article_mapping.keys() 
-                                     if 'part_of_shared' in article_mapping[c] and 
-                                        article_mapping[c]['part_of_shared'] == shared_code]
-                                        
-                # Create a combined item starting with the shared code article
+                # Create a combined item starting with the original article
                 combined_item = article.copy()
-                # Remove the helper field
-                combined_item.pop('part_of_shared', None)
-                combined_item['codice'] = shared_code  # Restore the original combined code
                 
-                # Aggregate availability data for all components
+                # Get all the individual parts of this shared code
+                individual_parts = shared_code_parts[code]
+                
+                # Sum availability data from all parts
                 for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 
                              'giac_d60', 'giac_d81', 'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 
                              'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss', 'off_mc', 'off_ms', 
                              'off_msa', 'off_mss']:
-                    # Sum the values from each component that has availability data
-                    combined_item[field] = sum(
-                        float(availability_mapping.get(comp, {}).get(field, 0)) 
-                        for comp in shared_components 
-                        if comp in availability_mapping
-                    )
+                    # Initialize with zero
+                    combined_item[field] = 0
+                    # Sum the values from individual parts
+                    for part in individual_parts:
+                        if part in availability_mapping:
+                            combined_item[field] += float(availability_mapping[part].get(field, 0))
+                
                 combined_data.append(combined_item)
+            
+            # If this is an individual part of a shared code, skip it (we'll process it with its parent)
+            elif 'part_of_shared' in article:
+                continue
+            
+            # Regular single code (not part of any shared code)
             else:
-                # Handle regular single codes as before
                 if code in availability_mapping:
                     # Create a copy of the original article data
                     combined_item = article.copy()
@@ -713,10 +725,11 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
 
         for article in article_data:
             if 'codice' in article and article['codice']:
+                # Standardize the code by trimming and converting to uppercase
                 article_code = article['codice'].strip().upper()
                 
                 # Always add the original code to the mapping
-                article_mapping[article_code] = article
+                article_mapping[article_code] = article.copy()
                 
                 # If it contains commas, also track the individual parts
                 if ',' in article_code:
@@ -731,15 +744,26 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
                             article_copy['part_of_shared'] = article_code
                             article_mapping[ind_code] = article_copy
 
-        # Use ONLY the individual codes for querying (shared codes won't exist in the DB)
-        query_codes = []
-        for code in article_mapping:
-            # If this is not a shared code (with commas) OR this is an individual part
-            if ',' not in code:
-                query_codes.append(code)
+        # Extract article codes and create the OR condition for the next query
+        # Use individual codes for comma-separated entries
+        article_codes = []
+        for code in article_mapping.keys():
+            if ',' not in code or code not in shared_code_parts:
+                article_codes.append(code)
+            else:
+                # For comma-separated codes, we've already added their parts to article_mapping
+                # We don't want to add the comma-separated code directly to the query
+                pass
 
-        # Now use query_codes for the SQL condition
-        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in query_codes])
+        if not article_codes:
+            return JSONResponse(
+                content={"message": "No valid article codes found."},
+                status_code=404
+            )
+
+        # 2. Build a single query to get availability data for all articles at once
+        # Create the OR condition part of the query
+        code_conditions = " OR ".join([f"UPPER(TRIM(amg_code)) = '{code}'" for code in article_codes])
         
         # Debug: Print the first part of the conditions 
         print(f"Sample of SQL conditions (first 100 chars): {code_conditions[:100]}...")
@@ -796,7 +820,7 @@ and occ_feva = 'N'
 nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
   and mpf_dfab between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))),0) dom_ms,
  
-nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code -- and occ_tipo in ('O','P','Q') 
+nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code --and occ_tipo in ('O','P','Q') 
 and occ_feva = 'N'
   and occ_dtco between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))),0) +
 nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
@@ -865,40 +889,40 @@ and nvl(amg_fagi,'S') = 'S'
         processed_shared_codes = set()
 
         for code, article in article_mapping.items():
-            # Check if this is part of a shared code and if we've already processed it
+            # Skip individual parts of shared codes that we've already processed
             if 'part_of_shared' in article and article['part_of_shared'] in processed_shared_codes:
                 continue
+            
+            # If this is a comma-separated code (original shared code)
+            if ',' in code and code in shared_code_parts:
+                processed_shared_codes.add(code)
                 
-            if 'part_of_shared' in article:
-                # This is a shared code - we need to aggregate availability data
-                shared_code = article['part_of_shared']
-                processed_shared_codes.add(shared_code)
-                
-                # Find all individual codes that are part of this shared code
-                shared_components = [c for c in article_mapping.keys() 
-                                     if 'part_of_shared' in article_mapping[c] and 
-                                        article_mapping[c]['part_of_shared'] == shared_code]
-                                        
-                # Create a combined item starting with the shared code article
+                # Create a combined item starting with the original article
                 combined_item = article.copy()
-                # Remove the helper field
-                combined_item.pop('part_of_shared', None)
-                combined_item['codice'] = shared_code  # Restore the original combined code
                 
-                # Aggregate availability data for all components
+                # Get all the individual parts of this shared code
+                individual_parts = shared_code_parts[code]
+                
+                # Sum availability data from all parts
                 for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 
                              'giac_d60', 'giac_d81', 'disp_d01', 'ord_mpp', 'ord_mp', 'ord_mc', 
                              'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss', 'off_mc', 'off_ms', 
                              'off_msa', 'off_mss']:
-                    # Sum the values from each component that has availability data
-                    combined_item[field] = sum(
-                        float(availability_mapping.get(comp, {}).get(field, 0)) 
-                        for comp in shared_components 
-                        if comp in availability_mapping
-                    )
+                    # Initialize with zero
+                    combined_item[field] = 0
+                    # Sum the values from individual parts
+                    for part in individual_parts:
+                        if part in availability_mapping:
+                            combined_item[field] += float(availability_mapping[part].get(field, 0))
+                
                 combined_data.append(combined_item)
+            
+            # If this is an individual part of a shared code, skip it (we'll process it with its parent)
+            elif 'part_of_shared' in article:
+                continue
+            
+            # Regular single code (not part of any shared code)
             else:
-                # Handle regular single codes as before
                 if code in availability_mapping:
                     # Create a copy of the original article data
                     combined_item = article.copy()
