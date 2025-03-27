@@ -111,6 +111,62 @@ async def get_article_disponibilita_commerciali():
             cursor.close()
 
 # Add a new product
+@router.post("/add_disponibilita_articolo")
+async def add_product_availability(request: Request):
+    """
+    Add a new product to the availability table
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        # Get the request body
+        body = await request.json()
+        
+        # Extract data from the request
+        posizione = body.get('posizione')
+        codice = body.get('codice')
+        descrizione = body.get('descrizione')
+        
+        # Validate required fields
+        if not all([posizione, codice, descrizione]):
+            return JSONResponse(
+                content={"message": "All fields (posizione, codice, descrizione) are required"},
+                status_code=400
+            )
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Insert the new record
+        query = '''
+            INSERT INTO products_availability 
+            (posizione, codice, descrizione, is_hub) 
+            VALUES (?, ?, ?, 1)
+        '''
+        
+        cursor.execute(query, (posizione, codice, descrizione))
+        conn.commit()
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time for add_disponibilita_articolo: {total_time} seconds")
+        
+        return JSONResponse(
+            content={"message": "Product added successfully"},
+            status_code=201
+        )
+        
+    except Exception as e:
+        print(f"Error adding product: {str(e)}")
+        if "duplicate" in str(e).lower() or "primary key" in str(e).lower():
+            return JSONResponse(
+                content={"message": "Product with this position already exists"},
+                status_code=409
+            )
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
+# Add a new product
 @router.post("/add_disponibilita_articolo_commerciali")
 async def add_product_availability_commerciali(request: Request):
     """
