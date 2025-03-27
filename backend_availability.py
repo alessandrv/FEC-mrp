@@ -392,7 +392,7 @@ async def get_articles(current_user: TokenData = Depends(get_current_user)):
             return JSONResponse(content=cached_result)
         
         # 1. First get the list of article codes from products_availability where is_hub = 1
-        article_query = "SELECT * FROM products_availability WHERE is_hub = 1"
+        article_query = "SELECT * FROM products_availability WHERE is_hub = 1 order by descrizione"
         cursor.execute(article_query)
         articles = cursor.fetchall()
         
@@ -706,7 +706,7 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
             return JSONResponse(content=cached_result)
         
         # 1. First get the list of article codes from products_availability where is_hub = 0
-        article_query = "SELECT * FROM products_availability WHERE is_hub = 0"
+        article_query = "SELECT * FROM products_availability WHERE is_hub = 0 order by descrizione"
         cursor.execute(article_query)
         articles = cursor.fetchall()
         
