@@ -2223,7 +2223,7 @@ const ArticlesTable = () => {
                     />
                 )}
                 
-                <div className="table-container" style={{ height: 'calc(90vh - 170px)' }}>
+                <div className="table-container" style={{ height: '90vh' }}>
                     <Table
                         bordered
                         columns={kioskColumnsWithActions}

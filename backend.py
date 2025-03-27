@@ -299,6 +299,10 @@ def get_optimized_query():
     return """
 select amg_code c_articolo, amg_dest d_articolo, amg_tipo a_p, amp_lead lt,
 nvl((select round(dep_scom) from mgdepo where dep_arti = amg_code and dep_code = 1),0) scrt,
+(select max(cf.des_clifor) from ofordic ofc
+ join ofordit oft on ofc.ofc_tipo = oft.oft_tipo and ofc.ofc_code = oft.oft_code
+ join agclifor cf on oft.oft_cofo = cf.cod_clifor
+ where ofc.ofc_arti = amg_code) fornitore,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 1) giac_d01,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 20) giac_d20,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 32) giac_d32,
@@ -413,11 +417,7 @@ async def get_articles():
     cache_key = "all_articles"
     cached_data = get_cached_result(cache_key)
     
-    if cached_data:
-        return Response(
-            content=cached_data,
-            media_type="application/json"
-        )
+    
     
     # If not in cache, fetch from database
     start_time = time.time()
