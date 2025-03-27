@@ -539,7 +539,7 @@ where amg_code = amp_code and amp_depo = 1
 and  amg_stat = 'D' 
 and nvl(amg_fagi,'S') = 'S'
         and ({code_conditions})
-        ordery by amg_dest
+        order by amg_dest
         """
         
         cursor.execute(availability_query)
