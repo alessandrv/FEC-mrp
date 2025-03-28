@@ -22,6 +22,7 @@ import {
 import { 
     CheckOutlined, 
     CloseOutlined, 
+    FilterOutlined,
     DeleteOutlined,
     EllipsisOutlined, 
     LoadingOutlined, 
@@ -124,6 +125,9 @@ const ArticlesTable = () => {
     const [isGroupLoading, setIsGroupLoading] = useState(false);
     const [groupArticleCodes, setGroupArticleCodes] = useState([]);
 
+    // Add state variable for unique suppliers
+    const [uniqueSuppliers, setUniqueSuppliers] = useState([]);
+
     const handleWebSocketMessage = (event) => {
         try {
             const updatedData = JSON.parse(event.data);
@@ -133,6 +137,11 @@ const ArticlesTable = () => {
             parsedData.sort((a, b) => a.c_articolo.localeCompare(b.c_articolo));
 
             setData(parsedData);
+            
+            // Update the unique suppliers list
+            const suppliers = [...new Set(parsedData.map(item => item.fornitore))].filter(Boolean).sort();
+            setUniqueSuppliers(suppliers);
+            
             console.log('Data updated via WebSocket.');
         } catch (error) {
             console.error('Error parsing WebSocket message:', error);
@@ -152,11 +161,13 @@ const ArticlesTable = () => {
     // Function to convert relevant values to integers, if needed
     // Function to convert relevant fields to integers
     const parseIntegerData = (data) => {
+        console.log('Parsing integer data:', data);
         return data.map((item) => ({
             ...item,
             c_articolo: item.c_articolo, // Articolo can remain as a string
             a_p: item.a_p, // AP might also remain as a string
             d_articolo: item.d_articolo, // Descrizione as a string
+            fornitore: item.fornitore,
             lt: parseInt(item.lt) || 0,
             scrt: parseInt(item.scrt) || 0,
             giac_d01: parseInt(item.giac_d01) || 0,
@@ -249,6 +260,10 @@ const ArticlesTable = () => {
                 setData(fetchedData);
                 // Make sure hideZeroRows is set to true as default
                 setHideZeroRows(true);
+                
+                // Extract unique suppliers and sort them alphabetically
+                const suppliers = [...new Set(fetchedData.map(item => item.fornitore))].filter(Boolean).sort();
+                setUniqueSuppliers(suppliers);
             } catch (error) {
                 message.error("Failed to fetch data from the server.");
                 console.error("Error fetching data:", error);
@@ -637,7 +652,52 @@ const ArticlesTable = () => {
             },
             defaultFilteredValue: ["A"],
         },
-        // Add additional columns with customized titles
+        {
+            title: "Fornitore",
+            dataIndex: "fornitore",
+            key: "fornitore",
+                        width: 100,
+
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Select
+                        placeholder="Seleziona fornitore"
+                        value={selectedKeys[0]}
+                        onChange={(value) => setSelectedKeys(value ? [value] : [])}
+                        style={{ width: 200, marginBottom: 8 }}
+                        showSearch
+                        optionFilterProp="children"
+                        filterOption={(input, option) =>
+                            (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                    >
+                        {uniqueSuppliers.map(supplier => (
+                            <Select.Option key={supplier} value={supplier}>
+                                {supplier}
+                            </Select.Option>
+                        ))}
+                    </Select>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90, marginRight: 8 }}
+                        >
+                            Applica
+                        </Button>
+                        <Button onClick={() => { clearFilters(); confirm(); }} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
+                    </div>
+                </div>
+            ),
+            filterIcon: filtered => (
+                <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+            ),
+            onFilter: (value, record) => record.fornitore === value,
+        },
         {
             title: 'Descrizione',
             dataIndex: 'd_articolo',
@@ -2515,7 +2575,7 @@ const ArticlesTable = () => {
                         pagination={false}
                         scroll={{
                             x: 1600,
-                            y: 750, // Adjust based on your layout needs
+                            y: 'max-content', // Adjust based on your layout needs
                         }}
                         virtual
                         onRow={(record, rowIndex) => {
@@ -2954,3 +3014,5 @@ const ArticlesTable = () => {
 };
 
 export default ArticlesTable;
+
+
