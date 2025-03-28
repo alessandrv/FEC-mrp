@@ -2577,7 +2577,7 @@ const ArticlesTable = () => {
                             x: 1600,
                             y: 'max-content', // Adjust based on your layout needs
                         }}
-                        
+                        virtual
                         onRow={(record, rowIndex) => {
                             return {
                                 onContextMenu: (event) => handleContextMenu(event, record), // Attach context menu handler
