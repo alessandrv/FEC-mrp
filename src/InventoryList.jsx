@@ -2575,7 +2575,7 @@ const ArticlesTable = () => {
                         pagination={false}
                         scroll={{
                             x: 1600,
-                            y: 'max-content', // Adjust based on your layout needs
+                            y: 750, // Adjust based on your layout needs
                         }}
                         virtual
                         onRow={(record, rowIndex) => {
