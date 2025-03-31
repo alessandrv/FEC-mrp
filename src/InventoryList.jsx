@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+
 import axios from "axios";
 import {
     Table,
@@ -49,6 +51,9 @@ import useWebSocket from "./hooks/useWebSocket"; // Import the custom hook
 import { API_BASE_URL, WEBSOCKET_URL } from './config'; // Import configuration
 
 const ArticlesTable = () => {
+
+    const navigate = useNavigate();
+
     const [contextMenuVisible, setContextMenuVisible] = useState(false);
     const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
     const [currentRow, setCurrentRow] = useState(null);
@@ -2013,6 +2018,10 @@ const ArticlesTable = () => {
         setIsAddGroupModalVisible(true);
     };
 
+    const reportDisponibilita = () => {
+        navigate('/availability');
+    };
+
     // Now the menu2 definition can reference handleKioskClick properly
     const menu2 = (
         <Menu>
@@ -2040,6 +2049,11 @@ const ArticlesTable = () => {
                     Mostra righe con tutti zeri
                 </Checkbox>
             </Menu.Item>
+            <Menu.Divider />
+            <Menu.Item key="disponibilita" onClick={reportDisponibilita}>
+                Report Online Disponibilità
+            </Menu.Item>
+
         </Menu>
     );
 
