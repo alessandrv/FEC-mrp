@@ -452,6 +452,16 @@ const ArticlesTable = () => {
             key: "oft_code",
         },
         {
+            title: "Cod. Fornitore",
+            dataIndex: "oft_cofo",
+            key: "oft_cofo",
+        },
+        {
+            title: "Fornitore",
+            dataIndex: "des_clifor",
+            key: "des_clifor",
+        },
+        {
             title: "Data",
             dataIndex: "oft_data",
             key: "oft_data",
