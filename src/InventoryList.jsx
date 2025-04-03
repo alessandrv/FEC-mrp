@@ -2155,8 +2155,8 @@ const ArticlesTable = () => {
                             Impegno corrente
                         </Menu.Item>
                         <Menu.Item
-                            key="storicoOrdini"
-                            onClick={() => handleStoricoOrdini(record.c_articolo, record.d_articolo)}
+                            key="ordiniFornitore"
+                            onClick={() => handleSupplierOrders(record.c_articolo, record.d_articolo)}
                         >
                             Ordini fornitore
                         </Menu.Item>
