@@ -1939,6 +1939,65 @@ and mpf_arti = ?
 ORDER BY occ_dtco asc
     """
 
+@app.get("/ordini_fornitore")
+async def get_article_history(article_code: str):
+    """
+    Get article history for a specific article.
+    """
+    # Try to get results from cache first (cache for 10 minutes)
+    CACHE_TTL = int(os.getenv('ARTICLE_HISTORY_CACHE_TTL_SECONDS', '600'))
+    cache_key = f"article_history_{article_code}"
+    cached_data = get_cached_result(cache_key)
+    
+    if cached_data:
+        return JSONResponse(content=cached_data)
+        
+    start_time = time.time()
+    try:
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+
+            query = """
+            select oft_tipo, oft_code, oft_data, ofc_qord from ofordit 
+ join  ofordic on ofc_tipo = oft_tipo and ofc_code = oft_code
+where ofc_arti = ? and oft_stat = "A"
+"""
+
+            # Execute the query with the article code parameter
+            # Since the article code is used three times due to UNION ALL, we need to provide it three times
+            params = (article_code)
+            cursor.execute(query, params)
+
+            # Fetch all results
+            rows = cursor.fetchall()
+
+            # Check if any rows were returned
+            if not rows:
+                return JSONResponse(
+                    content={"message": "Article not found."},
+                    status_code=404
+                )
+
+            # Convert the results to a list of dictionaries
+            columns = [column[0] for column in cursor.description]
+            results = [dict(zip(columns, row)) for row in rows]
+
+            # Encode the results
+            encoded_results = jsonable_encoder(results)
+            
+            # Cache the results
+            cache_result(cache_key, encoded_results, CACHE_TTL)
+
+            total_time = time.time() - start_time
+            print(f"Total execution time: {total_time} seconds")
+
+            # Return the results as JSON
+            return JSONResponse(content=encoded_results)
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
 
 @app.get("/report_groups")
 async def get_report_groups():

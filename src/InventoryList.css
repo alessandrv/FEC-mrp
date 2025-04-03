@@ -5,7 +5,9 @@
     overflow: auto;
 }
 
-
+.ant-table-cell.ant-table-cell-row-hover {
+    background-color: #a7a7a7 !important;
+}
 /* Apply text wrapping to table cells */
 
 .ant-table-cell {

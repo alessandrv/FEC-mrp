@@ -92,6 +92,12 @@ const ArticlesTable = () => {
     const [todayOrdersLoading, setTodayOrdersLoading] = useState(false);
     const [todayOrdersModalTitle, setTodayOrdersModalTitle] = useState("");
 
+    // Modal for Supplier Orders
+    const [isSupplierOrdersModalVisible, setIsSupplierOrdersModalVisible] = useState(false);
+    const [supplierOrdersData, setSupplierOrdersData] = useState([]);
+    const [supplierOrdersLoading, setSupplierOrdersLoading] = useState(false);
+    const [supplierOrdersModalTitle, setSupplierOrdersModalTitle] = useState("");
+
     // Filters and Search States
     const [showNegativeOnly, setShowNegativeOnly] = useState(false);
     const [showUnderScortaOnly, setShowUnderScortaOnly] = useState(false);
@@ -216,12 +222,13 @@ const ArticlesTable = () => {
                 key: "articolo",
                 onClick: () => handleAPClick(record.c_articolo)
             },
-            // Add the new Kiosk option
             {
-                label: "Visualizza Kiosk",
-                key: "kiosk",
-                onClick: () => handleKioskClick()
+                label: "Visualizza Ordini Fornitore",
+                key: "ordini_fornitore",
+                onClick: () => handleSupplierOrders(record.c_articolo, record.d_articolo)
             }
+            // Add the new Kiosk option
+           
         ]);
     };
 
@@ -317,6 +324,46 @@ const ArticlesTable = () => {
         }
     };
 
+    // Handler for supplier orders
+    const handleSupplierOrders = (articleCode, desc) => {
+        // Open the modal and show loading spinner
+        setIsSupplierOrdersModalVisible(true);
+        setSupplierOrdersLoading(true);
+        setSupplierOrdersModalTitle(`Ordini fornitore per articolo: ${articleCode} - ${desc}`);
+        setSupplierOrdersData([]); // Clear existing data
+
+        // Fetch supplier orders data
+        fetchSupplierOrdersData(articleCode);
+    };
+
+    // Function to fetch supplier orders data
+    const fetchSupplierOrdersData = async (articleCode) => {
+        try {
+            // Fetch data from the backend
+            const response = await axios.get(`${API_BASE_URL}/ordini_fornitore`, {
+                params: { article_code: articleCode },
+            });
+
+            const data = response.data;
+
+            if (!Array.isArray(data) || data.length === 0) {
+                message.info("Nessun ordine fornitore trovato per questo articolo.");
+                setIsSupplierOrdersModalVisible(false);
+                setSupplierOrdersLoading(false);
+                return;
+            }
+
+            // Process data if necessary
+            setSupplierOrdersData(data);
+        } catch (error) {
+            message.error("Nessun ordine fornitore aperto trovato per questo articolo.");
+            console.error("Error fetching supplier orders data:", error);
+            setIsSupplierOrdersModalVisible(false);
+        } finally {
+            setSupplierOrdersLoading(false);
+        }
+    };
+
     const relatedColumnsMap = {
         "disponibilita_m_corr": ["dom_mc", "off_mc"],
         "disponibilita_m_succ": ["dom_ms", "off_ms"],
@@ -391,6 +438,32 @@ const ArticlesTable = () => {
         },
 
     ];
+
+    // Columns for supplier orders
+    const supplierOrdersColumns = [
+        {
+            title: "Tipo",
+            dataIndex: "oft_tipo",
+            key: "oft_tipo",
+        },
+        {
+            title: "Codice",
+            dataIndex: "oft_code",
+            key: "oft_code",
+        },
+        {
+            title: "Data",
+            dataIndex: "oft_data",
+            key: "oft_data",
+            render: (text) => text ? new Date(text).toLocaleDateString() : "",
+        },
+        {
+            title: "Quantità",
+            dataIndex: "ofc_qord",
+            key: "ofc_qord",
+        }
+    ];
+
     const contextMenu = (
         <Menu>
             {contextMenuOptions.map((option) => (
@@ -657,52 +730,7 @@ const ArticlesTable = () => {
             },
             defaultFilteredValue: ["A"],
         },
-        {
-            title: "Fornitore",
-            dataIndex: "fornitore",
-            key: "fornitore",
-                        width: 100,
-
-            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-                <div style={{ padding: 8 }}>
-                    <Select
-                        placeholder="Seleziona fornitore"
-                        value={selectedKeys[0]}
-                        onChange={(value) => setSelectedKeys(value ? [value] : [])}
-                        style={{ width: 200, marginBottom: 8 }}
-                        showSearch
-                        optionFilterProp="children"
-                        filterOption={(input, option) =>
-                            (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                        }
-                    >
-                        {uniqueSuppliers.map(supplier => (
-                            <Select.Option key={supplier} value={supplier}>
-                                {supplier}
-                            </Select.Option>
-                        ))}
-                    </Select>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <Button
-                            type="primary"
-                            onClick={() => confirm()}
-                            icon={<SearchOutlined />}
-                            size="small"
-                            style={{ width: 90, marginRight: 8 }}
-                        >
-                            Applica
-                        </Button>
-                        <Button onClick={() => { clearFilters(); confirm(); }} size="small" style={{ width: 90 }}>
-                            Reset
-                        </Button>
-                    </div>
-                </div>
-            ),
-            filterIcon: filtered => (
-                <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
-            ),
-            onFilter: (value, record) => record.fornitore === value,
-        },
+      
         {
             title: 'Descrizione',
             dataIndex: 'd_articolo',
@@ -751,6 +779,52 @@ const ArticlesTable = () => {
               ),
             onFilter: (value, record) =>
                 record.d_articolo.toString().toLowerCase().includes(value.toLowerCase()),
+        },
+          {
+            title: "Fornitore",
+            dataIndex: "fornitore",
+            key: "fornitore",
+                        width: 100,
+
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Select
+                        placeholder="Seleziona fornitore"
+                        value={selectedKeys[0]}
+                        onChange={(value) => setSelectedKeys(value ? [value] : [])}
+                        style={{ width: 200, marginBottom: 8 }}
+                        showSearch
+                        optionFilterProp="children"
+                        filterOption={(input, option) =>
+                            (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                        }
+                    >
+                        {uniqueSuppliers.map(supplier => (
+                            <Select.Option key={supplier} value={supplier}>
+                                {supplier}
+                            </Select.Option>
+                        ))}
+                    </Select>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 90, marginRight: 8 }}
+                        >
+                            Applica
+                        </Button>
+                        <Button onClick={() => { clearFilters(); confirm(); }} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
+                    </div>
+                </div>
+            ),
+            filterIcon: filtered => (
+                <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+            ),
+            onFilter: (value, record) => record.fornitore === value,
         },
         {
             title: "LT", // Customize for another field
@@ -2031,9 +2105,7 @@ const ArticlesTable = () => {
             <Menu.Item key="simulateOrder" onClick={() => setIsSimulationModalVisible(true)}>
                 Simula Ordine
             </Menu.Item>
-            <Menu.Item key="showKiosk" onClick={handleKioskClick}>
-                Visualizza Kiosk
-            </Menu.Item>
+           
             <Menu.Item key="exportExcel" onClick={exportExcel}>
                 Export Excel
             </Menu.Item>
@@ -2081,6 +2153,12 @@ const ArticlesTable = () => {
                             onClick={() => handleStoricoOrdini(record.c_articolo, record.d_articolo)}
                         >
                             Impegno corrente
+                        </Menu.Item>
+                        <Menu.Item
+                            key="storicoOrdini"
+                            onClick={() => handleStoricoOrdini(record.c_articolo, record.d_articolo)}
+                        >
+                            Ordini fornitore
                         </Menu.Item>
                     </Menu>
                 );
@@ -2583,6 +2661,7 @@ const ArticlesTable = () => {
                 >
                     <Table
                         bordered
+                        rowClassName={"custom-row"}
                         dataSource={filteredData}
                         columns={columns}
                         rowKey="c_articolo"
@@ -2702,29 +2781,56 @@ const ArticlesTable = () => {
                     title={orderHistoryModalTitle}
                     visible={isOrderHistoryModalVisible}
                     onCancel={() => setIsOrderHistoryModalVisible(false)}
-                    footer={null}
-                    width={1500}
+                    footer={[
+                        <Button key="close" onClick={() => setIsOrderHistoryModalVisible(false)}>
+                            Chiudi
+                        </Button>,
+                    ]}
+                    width={1200}
                 >
                     {orderHistoryLoading ? (
                         <div style={{ textAlign: "center", padding: "50px 0" }}>
-                             <Spin
-                    indicator={<LoadingOutlined spin />}
-                    size="large"
-                     tip="Caricamento impegni articolo..." />
+                            <Spin size="large" tip="Caricamento impegni articolo..." />
                         </div>
                     ) : (
-                        <div>
-                            <Table
-                                dataSource={orderHistoryData}
-                                columns={orderHistoryColumns}
-                                rowKey={(record, index) => index}
-                                pagination={{ pageSize: 25 }}
-                                scroll={{ x: "max-content" }}
-                            />
-                        </div>
+                        <Table
+                            columns={orderHistoryColumns}
+                            dataSource={orderHistoryData}
+                            rowKey={(record, index) => index}
+                            pagination={{ pageSize: 10 }}
+                            scroll={{ x: "max-content" }}
+                        />
                     )}
                 </Modal>
 
+                {/* Modal for displaying supplier orders */}
+                <Modal
+                    title={supplierOrdersModalTitle}
+                    visible={isSupplierOrdersModalVisible}
+                    onCancel={() => setIsSupplierOrdersModalVisible(false)}
+                    footer={[
+                        <Button key="close" onClick={() => setIsSupplierOrdersModalVisible(false)}>
+                            Chiudi
+                        </Button>,
+                    ]}
+                    width={800}
+                >
+                    {supplierOrdersLoading ? (
+                        <div style={{ textAlign: "center", padding: "50px 0" }}>
+                            <Spin size="large" tip="Caricamento ordini fornitore..." />
+                        </div>
+                    ) : (
+                        <Table
+                            columns={supplierOrdersColumns}
+                            dataSource={supplierOrdersData}
+                            rowKey={(record, index) => index}
+                            pagination={{ pageSize: 10 }}
+                            scroll={{ x: "max-content" }}
+                        />
+                    )}
+                </Modal>
+
+                {/* Modal for Column Selector */}
                 <Modal
                     title="Seleziona Colonne"
                     visible={isColumnSelectorVisible}
@@ -2743,7 +2849,8 @@ const ArticlesTable = () => {
                         ))}
                     </Checkbox.Group>
                 </Modal>
-                {/* Modal for Displaying Today's Orders */}
+
+                {/* Modal for displaying today's orders */}
                 <Modal
                     title={todayOrdersModalTitle}
                     visible={isTodayOrdersModalVisible}
