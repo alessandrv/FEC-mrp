@@ -462,7 +462,7 @@ const ArticlesTable = () => {
             key: "des_clifor",
         },
         {
-            title: "Data",
+            title: "Data Cons.",
             dataIndex: "oft_data",
             key: "oft_data",
             render: (text) => text ? new Date(text).toLocaleDateString() : "",
