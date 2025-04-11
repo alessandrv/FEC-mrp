@@ -1958,7 +1958,7 @@ async def get_article_history(article_code: str):
             cursor = conn.cursor()
 
             query = """
-            select oft_tipo, oft_code, oft_data, ofc_qord, oft_cofo, des_clifor from ofordit 
+            select oft_tipo, oft_code, ofc_dtco as oft_data, ofc_qord, oft_cofo, des_clifor from ofordit 
  join  ofordic on ofc_tipo = oft_tipo and ofc_code = oft_code
  join agclifor on cod_clifor = oft_cofo
 where ofc_arti = ? and oft_stat = "A"
