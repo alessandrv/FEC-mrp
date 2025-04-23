@@ -139,6 +139,38 @@ const ArticlesTable = () => {
     // Add state variable for unique suppliers
     const [uniqueSuppliers, setUniqueSuppliers] = useState([]);
 
+    // Add this utility function to convert wildcard pattern to regex
+    const wildcardToRegex = (pattern) => {
+        // Escape special regex characters except *
+        const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+        // Convert * to .* for regex
+        const regexPattern = escapedPattern.replace(/\*/g, '.*');
+        // Create case-insensitive regex
+        return new RegExp(`^${regexPattern}$`, 'i');
+    };
+
+    // Add this function to check if a string matches a wildcard pattern
+    const matchesWildcardPattern = (text, pattern) => {
+        if (!pattern) return true;
+        // Trim the text to remove any leading/trailing whitespace
+        const trimmedText = text.trim();
+        // Convert the pattern to a regex
+        const regex = wildcardToRegex(pattern);
+        // Test if the text matches the pattern
+        return regex.test(trimmedText);
+    };
+
+    // Add a debug function to help troubleshoot pattern matching
+    const debugPatternMatch = (text, pattern) => {
+        const trimmedText = text.trim();
+        const regex = wildcardToRegex(pattern);
+        console.log(`Pattern: ${pattern}`);
+        console.log(`Regex: ${regex}`);
+        console.log(`Text: ${trimmedText}`);
+        console.log(`Match: ${regex.test(trimmedText)}`);
+        return regex.test(trimmedText);
+    };
+
     const handleWebSocketMessage = (event) => {
         try {
             const updatedData = JSON.parse(event.data);
@@ -663,21 +695,23 @@ const ArticlesTable = () => {
     // Define columns with filters
     const dataColumns = [
         {
-            title: "Articolo", // Customized title
+            title: "Articolo",
             dataIndex: "c_articolo",
             key: "c_articolo",
-            render: (text) => <strong>{text}</strong>, // Makes each article text bold
-            width: 100, // Fixed width
-
+            render: (text) => <strong>{text}</strong>,
+            width: 100,
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
                 <div style={{ padding: 8 }}>
                     <Input
-                        placeholder="Cerca Articolo"
+                        placeholder="Cerca Articolo (usa * come wildcard)"
                         value={selectedKeys[0]}
                         onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
                         onPressEnter={() => handleSearch(selectedKeys, confirm)}
                         style={{ marginBottom: 8, display: "block" }}
                     />
+                    <div style={{ marginBottom: 8, fontSize: '12px', color: '#666' }}>
+                        Esempi: 0P*, *0P, *0P*, 0P*AC, 0AC*MF
+                    </div>
                     <Button
                         type="primary"
                         onClick={() => handleSearch(selectedKeys, confirm)}
@@ -694,13 +728,15 @@ const ArticlesTable = () => {
             ),
             filterIcon: (filtered) => (
                 <SearchOutlined
-                  style={{
-                    color: filtered ? '#1677ff' : undefined,
-                  }}
+                    style={{
+                        color: filtered ? '#1677ff' : undefined,
+                    }}
                 />
-              ),
-            onFilter: (value, record) =>
-                record.c_articolo.toString().toLowerCase().includes(value.toLowerCase()),
+            ),
+            onFilter: (value, record) => {
+                const result = debugPatternMatch(record.c_articolo, value);
+                return result;
+            },
         },
         {
             title: "AP", // Customized title for 'a_p'
@@ -1415,12 +1451,10 @@ const ArticlesTable = () => {
             return true;
         })
         .filter(item => {
-            // Filter by search text
+            // Filter by search text using wildcard pattern
             if (searchText) {
-                return (
-                    item.c_articolo.toLowerCase().includes(searchText.toLowerCase()) ||
-                    item.d_articolo.toLowerCase().includes(searchText.toLowerCase())
-                );
+                return debugPatternMatch(item.c_articolo, searchText) ||
+                       item.d_articolo.toLowerCase().includes(searchText.toLowerCase());
             }
             return true;
         })
