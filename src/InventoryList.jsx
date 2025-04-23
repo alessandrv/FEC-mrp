@@ -703,7 +703,7 @@ const ArticlesTable = () => {
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
                 <div style={{ padding: 8 }}>
                     <Input
-                        placeholder="Cerca Articolo (usa * come wildcard)"
+                        placeholder="Esempi: 0P*, *0P, *0P*, 0P*AC, 0AC*MF"
                         value={selectedKeys[0]}
                         onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
                         onPressEnter={() => handleSearch(selectedKeys, confirm)}
@@ -717,7 +717,7 @@ const ArticlesTable = () => {
                         onClick={() => handleSearch(selectedKeys, confirm)}
                         icon={<SearchOutlined />}
                         size="small"
-                        style={{ width: 90, marginRight: 8 }}
+                        style={{ width: 150, marginRight: 8 }}
                     >
                         Cerca
                     </Button>
