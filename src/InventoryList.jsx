@@ -1287,6 +1287,51 @@ const ArticlesTable = () => {
             title: "Impegno m corr.", // Customize for another field
             dataIndex: "dom_mc",
             key: "dom_mc",
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Radio.Group
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "all") {
+                                clearFilters();
+                            } else {
+                                setSelectedKeys([value]);
+                            }
+                        }}
+                        value={selectedKeys[0] || "all"}
+                        style={{ width: "100%" }}
+                    >
+                        <Radio.Button value="all">Tutti</Radio.Button>
+                        <Radio.Button value="with">Con Impegni</Radio.Button>
+                        <Radio.Button value="without">Senza Impegni</Radio.Button>
+                    </Radio.Group>
+                    <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between" }}>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            size="small"
+                            style={{ width: 90, marginRight: 8 }}
+                        >
+                            Applica
+                        </Button>
+                        <Button onClick={() => { clearFilters(); confirm(); }} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
+                    </div>
+                </div>
+            ),
+            filterIcon: filtered => (
+                <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+            ),
+            onFilter: (value, record) => {
+                if (value === "with") {
+                    return record.dom_mc > 0;
+                }
+                if (value === "without") {
+                    return record.dom_mc === 0;
+                }
+                return true;
+            },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_mc");
                 return (
@@ -1305,6 +1350,51 @@ const ArticlesTable = () => {
             title: "Impegno m succ.", // Customize for another field
             dataIndex: "dom_ms",
             key: "dom_ms",
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Radio.Group
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "all") {
+                                clearFilters();
+                            } else {
+                                setSelectedKeys([value]);
+                            }
+                        }}
+                        value={selectedKeys[0] || "all"}
+                        style={{ width: "100%" }}
+                    >
+                        <Radio.Button value="all">Tutti</Radio.Button>
+                        <Radio.Button value="with">Con Impegni</Radio.Button>
+                        <Radio.Button value="without">Senza Impegni</Radio.Button>
+                    </Radio.Group>
+                    <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between" }}>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            size="small"
+                            style={{ width: 90, marginRight: 8 }}
+                        >
+                            Applica
+                        </Button>
+                        <Button onClick={() => { clearFilters(); confirm(); }} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
+                    </div>
+                </div>
+            ),
+            filterIcon: filtered => (
+                <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+            ),
+            onFilter: (value, record) => {
+                if (value === "with") {
+                    return record.dom_ms > 0;
+                }
+                if (value === "without") {
+                    return record.dom_ms === 0;
+                }
+                return true;
+            },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_ms");
                 return (
@@ -1324,6 +1414,51 @@ const ArticlesTable = () => {
             title: "Impegno 2m succ.", // Customize for another field
             dataIndex: "dom_msa",
             key: "dom_msa",
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Radio.Group
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "all") {
+                                clearFilters();
+                            } else {
+                                setSelectedKeys([value]);
+                            }
+                        }}
+                        value={selectedKeys[0] || "all"}
+                        style={{ width: "100%" }}
+                    >
+                        <Radio.Button value="all">Tutti</Radio.Button>
+                        <Radio.Button value="with">Con Impegni</Radio.Button>
+                        <Radio.Button value="without">Senza Impegni</Radio.Button>
+                    </Radio.Group>
+                    <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between" }}>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            size="small"
+                            style={{ width: 90, marginRight: 8 }}
+                        >
+                            Applica
+                        </Button>
+                        <Button onClick={() => { clearFilters(); confirm(); }} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
+                    </div>
+                </div>
+            ),
+            filterIcon: filtered => (
+                <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+            ),
+            onFilter: (value, record) => {
+                if (value === "with") {
+                    return record.dom_msa > 0;
+                }
+                if (value === "without") {
+                    return record.dom_msa === 0;
+                }
+                return true;
+            },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_msa");
                 return (
@@ -1341,6 +1476,51 @@ const ArticlesTable = () => {
             title: "Impegno 3m+ succ.", // Customize for another field
             dataIndex: "dom_mss",
             key: "dom_mss",
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+                <div style={{ padding: 8 }}>
+                    <Radio.Group
+                        onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === "all") {
+                                clearFilters();
+                            } else {
+                                setSelectedKeys([value]);
+                            }
+                        }}
+                        value={selectedKeys[0] || "all"}
+                        style={{ width: "100%" }}
+                    >
+                        <Radio.Button value="all">Tutti</Radio.Button>
+                        <Radio.Button value="with">Con Impegni</Radio.Button>
+                        <Radio.Button value="without">Senza Impegni</Radio.Button>
+                    </Radio.Group>
+                    <div style={{ marginTop: 8, display: "flex", justifyContent: "space-between" }}>
+                        <Button
+                            type="primary"
+                            onClick={() => confirm()}
+                            size="small"
+                            style={{ width: 90, marginRight: 8 }}
+                        >
+                            Applica
+                        </Button>
+                        <Button onClick={() => { clearFilters(); confirm(); }} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
+                    </div>
+                </div>
+            ),
+            filterIcon: filtered => (
+                <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
+            ),
+            onFilter: (value, record) => {
+                if (value === "with") {
+                    return record.dom_mss > 0;
+                }
+                if (value === "without") {
+                    return record.dom_mss === 0;
+                }
+                return true;
+            },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_mss");
                 return (
