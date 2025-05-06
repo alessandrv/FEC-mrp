@@ -1063,13 +1063,20 @@ async def get_article_history(article_code: str, current_user: TokenData = Depen
         columns = [column[0] for column in cursor.description]
         results = [dict(zip(columns, row)) for row in rows]
 
-        # Convert any Decimal values to floats
+        # Process the results to ensure JSON serialization
         for result in results:
             for key, value in result.items():
+                # Convert Decimal to float
                 if isinstance(value, Decimal):
                     result[key] = float(value)
+                # Convert date objects to ISO format strings
+                elif hasattr(value, 'isoformat'):  # This will catch datetime.date and datetime.datetime
+                    result[key] = value.isoformat()
+                # Convert any other non-serializable objects to strings
+                elif not isinstance(value, (str, int, float, bool, type(None), list, dict)):
+                    result[key] = str(value)
 
-        # Cache the result
+        # Cache the processed results
         store_in_cache(cache_key, results, ttl=300)  # Cache for 5 minutes
 
         total_time = time.time() - start_time
