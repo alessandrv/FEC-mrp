@@ -985,7 +985,7 @@ def get_article_history_query():
     return """
 select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
        mpf_qfab * gol_qord / mol_quaor totale, 
-       (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
+       occ_qcon consegnata, 
        mol_parte, p.amg_desc mol_desc, 
        occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
        oct_stap
@@ -1001,7 +1001,7 @@ and mpf_feva = 'N'
 and mpf_arti = ?
 union all
 select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
-       occ_qmov, occ_qmov-occ_qcon residuo, 
+       occ_qmov, occ_qcon consegnata, 
        '' mol_parte, '' mol_desc, 
        occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
        oct_stap
@@ -1013,7 +1013,7 @@ and occ_feva = 'N'
 and occ_arti = ?
 union all
 select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
-       mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
+       mpf_qfab, occ_qcon consegnata, 
        mol_parte, p.amg_desc mol_desc, 
        "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
        '' as oct_stap
