@@ -1017,7 +1017,7 @@ select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc,
        mol_parte, p.amg_desc mol_desc, 
        "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
        '' as oct_stap
-from mpfabbi, mpordil, mganag f, mganag p, mggrum gf
+from mpfabbi, mpordil, mganag f, mganag p, mggrum gf, ocordic
 where mpf_ordl = mol_code
 and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
 and mol_parte = p.amg_code
