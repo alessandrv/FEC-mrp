@@ -1945,12 +1945,7 @@ async def get_article_history(article_code: str):
     Get article history for a specific article.
     """
     # Try to get results from cache first (cache for 10 minutes)
-    CACHE_TTL = int(os.getenv('ARTICLE_HISTORY_CACHE_TTL_SECONDS', '600'))
-    cache_key = f"article_history_{article_code}"
-    cached_data = get_cached_result(cache_key)
     
-    if cached_data:
-        return JSONResponse(content=cached_data)
         
     start_time = time.time()
     try:
