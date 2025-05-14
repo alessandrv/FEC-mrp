@@ -1982,7 +1982,6 @@ where ofc_arti = ? and oft_stat = "A"
             encoded_results = jsonable_encoder(results)
             
             # Cache the results
-            cache_result(cache_key, encoded_results, CACHE_TTL)
 
             total_time = time.time() - start_time
             print(f"Total execution time: {total_time} seconds")
