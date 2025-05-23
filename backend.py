@@ -1392,7 +1392,7 @@ select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc,
        mpf_qfab * gol_qord / mol_quaor totale, 
        (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
        mol_parte, p.amg_desc mol_desc, 
-       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
+       occ_tipo, occ_code, occ_riga, oct_data, oct_cocl, des_clifor,
        oct_stap
 from mpfabbi, mpordil, mpordgol, ocordic, ocordit, agclifor, mganag f, mganag p, mggrum gf
 where mpf_ordl = mol_code
@@ -1409,7 +1409,7 @@ union all
 select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
        occ_qmov, occ_qmov-occ_qcon residuo, 
        '' mol_parte, '' mol_desc, 
-       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
+       occ_tipo, occ_code, occ_riga, oct_data, oct_cocl, des_clifor,
        oct_stap
 from ocordic, ocordit, agclifor, mganag f, mggrum gf
 where oct_tipo = occ_tipo and oct_code = occ_code
