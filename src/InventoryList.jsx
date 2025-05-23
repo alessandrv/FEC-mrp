@@ -418,7 +418,7 @@ const ArticlesTable = () => {
         try {
             // Fetch data from the backend
             const response = await axios.get(`${API_BASE_URL}/customer-orders`, {
-                params: { article_code: articleCode },
+                params: { codice: articleCode },
             });
 
             const data = response.data;
