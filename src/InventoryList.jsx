@@ -3439,7 +3439,7 @@ const customerOrdersColumns = [
                             columns={orderHistoryColumns}
                             dataSource={orderHistoryData}
                             rowKey={(record, index) => index}
-                            pagination={{ pageSize: 10 }}
+                            pagination={{ pageSize: 20 }}
                             scroll={{ x: "max-content" }}
                         />
                     )}
@@ -3466,7 +3466,7 @@ const customerOrdersColumns = [
                             columns={supplierOrdersColumns}
                             dataSource={supplierOrdersData}
                             rowKey={(record, index) => index}
-                            pagination={{ pageSize: 10 }}
+                            pagination={{ pageSize: 20 }}
                             scroll={{ x: "max-content" }}
                         />
                     )}
@@ -3491,7 +3491,7 @@ const customerOrdersColumns = [
                             columns={customerOrdersColumns}
                             dataSource={customerOrdersData}
                             rowKey={(record, index) => index}
-                            pagination={{ pageSize: 10 }}
+                            pagination={{ pageSize: 20 }}
                             scroll={{ x: "max-content" }}
                         />
                     )}
@@ -3537,7 +3537,7 @@ const customerOrdersColumns = [
                                 dataSource={todayOrdersData}
                                 columns={todayOrdersColumns}
                                 rowKey={(record, index) => index}
-                                pagination={{ pageSize: 10 }}
+                                pagination={{ pageSize: 20 }}
                                 scroll={{ x: "max-content" }}
                             />
                         </div>
