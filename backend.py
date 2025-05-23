@@ -1388,12 +1388,12 @@ async def customer_orders(
         cursor = conn.cursor()
         
         query = """
-select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, mpl_feva,
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, mpf_feva,
        mpf_qfab * gol_qord / mol_quaor totale, 
        (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
        mol_parte, p.amg_desc mol_desc, 
        occ_tipo, occ_code, occ_riga, oct_data, oct_cocl, des_clifor,
-       oct_stap
+       oct_stat
 from mpfabbi, mpordil, mpordgol, ocordic, ocordit, agclifor, mganag f, mganag p, mggrum gf
 where mpf_ordl = mol_code
 and mol_code = gol_mpco
@@ -1410,7 +1410,7 @@ select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, occ_feva,
        occ_qmov, occ_qmov-occ_qcon residuo, 
        '' mol_parte, '' mol_desc, 
        occ_tipo, occ_code, occ_riga, oct_data, oct_cocl, des_clifor,
-       oct_stap
+       oct_stat
 from ocordic, ocordit, agclifor, mganag f, mggrum gf
 where oct_tipo = occ_tipo and oct_code = occ_code
 and oct_cocl = cod_clifor
@@ -1419,11 +1419,11 @@ and occ_arti = ?
 and oct_data > (today - 120)
 and oct_data <= today
 union all
-select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, mpl_feva,
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, mpf_feva,
        mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
        mol_parte, p.amg_desc mol_desc, 
        "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
-       '' as oct_stap
+       '' as oct_stat
 from mpfabbi, mpordil, mganag f, mganag p, mggrum gf
 where mpf_ordl = mol_code
 and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
@@ -1444,7 +1444,7 @@ ORDER BY oct_data desc
                 "occ_tipo": row.occ_tipo,
                 "occ_code": row.occ_code,
                 "oct_data": row.oct_data,
-                "mpl_feva": row.mpl_feva,
+                "mpf_feva": row.mpf_feva,
                 "totale": row.totale,
                 "residuo": row.residuo,
                 "oct_cocl": row.oct_cocl,
@@ -1456,7 +1456,7 @@ ORDER BY oct_data desc
     
     except Exception as e:
         print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(status_code=500, detail=str(e))
     
     finally:
         if cursor:
@@ -1993,7 +1993,7 @@ select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc,
        (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
        mol_parte, p.amg_desc mol_desc, 
        occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
-       oct_stap
+       oct_stat
 from mpfabbi, mpordil, mpordgol, ocordic, ocordit, agclifor, mganag f, mganag p, mggrum gf
 where mpf_ordl = mol_code
 and mol_code = gol_mpco
@@ -2009,7 +2009,7 @@ select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc,
        occ_qmov, occ_qmov-occ_qcon residuo, 
        '' mol_parte, '' mol_desc, 
        occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
-       oct_stap
+       oct_stat
 from ocordic, ocordit, agclifor, mganag f, mggrum gf
 where oct_tipo = occ_tipo and oct_code = occ_code
 and oct_cocl = cod_clifor
@@ -2021,7 +2021,7 @@ select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc,
        mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
        mol_parte, p.amg_desc mol_desc, 
        "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
-       '' as oct_stap
+       '' as oct_stat
 from mpfabbi, mpordil, mganag f, mganag p, mggrum gf
 where mpf_ordl = mol_code
 and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code

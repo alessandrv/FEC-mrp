@@ -532,8 +532,8 @@ const customerOrdersColumns = [
     },
     {
         title: "Evaso",
-        dataIndex: "mpl_feva",
-        key: "mpl_feva",
+        dataIndex: "mpf_feva",
+        key: "mpf_feva",
         render: (text) => {
             switch (text) {
                 case 'S':
