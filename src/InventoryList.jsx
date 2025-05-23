@@ -514,7 +514,28 @@ const ArticlesTable = () => {
         },
 
     ];
-
+const customerOrdersColumns = [
+    {
+        title: "Data",
+        dataIndex: "occ_dtco",
+        key: "occ_dtco",
+    },
+    {
+        title: "Quantità",
+        dataIndex: "occ_qcon",
+        key: "occ_qcon",
+    },
+    {
+        title: "Cliente",
+        dataIndex: "oct_cocl",
+        key: "oct_cocl",
+    },
+    {
+        title: "Ragione Sociale",
+        dataIndex: "des_clifor",
+        key: "des_clifor",
+    }
+];
     // Columns for supplier orders
     const supplierOrdersColumns = [
         {
