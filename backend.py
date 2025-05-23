@@ -1388,7 +1388,7 @@ async def customer_orders(
         cursor = conn.cursor()
         
         query = """
-select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, mpl_feva,
        mpf_qfab * gol_qord / mol_quaor totale, 
        (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
        mol_parte, p.amg_desc mol_desc, 
@@ -1406,7 +1406,7 @@ and mpf_arti = ?
 and oct_data > (today - 120)
 and oct_data <= today
 union all
-select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, occ_feva,
        occ_qmov, occ_qmov-occ_qcon residuo, 
        '' mol_parte, '' mol_desc, 
        occ_tipo, occ_code, occ_riga, oct_data, oct_cocl, des_clifor,
@@ -1419,7 +1419,7 @@ and occ_arti = ?
 and oct_data > (today - 120)
 and oct_data <= today
 union all
-select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, mpl_feva,
        mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
        mol_parte, p.amg_desc mol_desc, 
        "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
@@ -1444,6 +1444,7 @@ ORDER BY oct_data desc
                 "occ_tipo": row.occ_tipo,
                 "occ_code": row.occ_code,
                 "oct_data": row.oct_data,
+                "mpl_feva": row.mpl_feva,
                 "totale": row.totale,
                 "residuo": row.residuo,
                 "oct_cocl": row.oct_cocl,

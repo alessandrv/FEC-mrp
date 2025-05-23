@@ -381,7 +381,7 @@ const ArticlesTable = () => {
         // Open the modal and show loading spinner
         setIsCustomerOrdersModalVisible(true);
         setCustomerOrdersLoading(true);
-        setCustomerOrdersModalTitle(`Ordini cliente passati per articolo: ${articleCode}`);
+        setCustomerOrdersModalTitle(`Storico ordini clienti per articolo: ${articleCode}`);
         setCustomerOrdersData([]); // Clear existing data
 
         // Fetch customer orders data
@@ -477,8 +477,8 @@ const ArticlesTable = () => {
         },
         {
             title: "Stato",
-            dataIndex: "oct_stap",
-            key: "oct_stap",
+            dataIndex: "oct_stat",
+            key: "oct_stat",
             render: (text) => {
                 switch (text) {
                     case 'A':
@@ -517,8 +517,8 @@ const ArticlesTable = () => {
 const customerOrdersColumns = [
     {
         title: "Data",
-        dataIndex: "occ_data",
-        key: "occ_data",
+        dataIndex: "oct_data",
+        key: "oct_data",
     },
     {
         title: "Tipo",
@@ -530,7 +530,21 @@ const customerOrdersColumns = [
         dataIndex: "occ_code",
         key: "occ_code",
     },
-    
+    {
+        title: "Evaso",
+        dataIndex: "mpl_feva",
+        key: "mpl_feva",
+        render: (text) => {
+            switch (text) {
+                case 'S':
+                    return <Tag color="green">Si</Tag>;
+                case 'N':
+                    return <Tag color="red">No</Tag>;
+                default:
+                    return text;
+            }
+        },
+    },
     {
         title: "Cliente",
         dataIndex: "oct_cocl",
@@ -2786,7 +2800,7 @@ const customerOrdersColumns = [
                             key="ordiniCliente"
                             onClick={() => handleCustomerOrders(record.c_articolo)}
                         >
-                            Ordini cliente passati
+                            Storico ordini clienti
                         </Menu.Item>
                     </Menu>
                 );
@@ -3470,7 +3484,7 @@ const customerOrdersColumns = [
                 >
                     {customerOrdersLoading ? (
                         <div style={{ textAlign: "center", padding: "50px 0" }}>
-                            <Spin size="large" tip="Caricamento ordini cliente passati..." />
+                            <Spin size="large" tip="Caricamento Storico ordini clienti..." />
                         </div>
                     ) : (
                         <Table
