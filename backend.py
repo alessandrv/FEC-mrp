@@ -1388,10 +1388,50 @@ async def customer_orders(
         cursor = conn.cursor()
         
         query = """
-select occ_dtco, occ_qcon, oct_cocl, des_clifor from ocordic 
-join ocordit on occ_tipo = oct_tipo and oct_code = occ_code
-join agclifor on oct_cocl = cod_clifor
-where occ_arti = ? and occ_dtco < TODAY and occ_dtco > (today - 120) order by occ_dtco desc
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+       mpf_qfab * gol_qord / mol_quaor totale, 
+       (mpf_qfab-mpf_qpre)* gol_qord / mol_quaor residuo, 
+       mol_parte, p.amg_desc mol_desc, 
+       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
+       oct_stap
+from mpfabbi, mpordil, mpordgol, ocordic, ocordit, agclifor, mganag f, mganag p, mggrum gf
+where mpf_ordl = mol_code
+and mol_code = gol_mpco
+and gol_octi = occ_tipo and gol_occo = occ_code and gol_ocri = occ_riga
+and oct_tipo = occ_tipo and oct_code = occ_code
+and oct_cocl = cod_clifor
+and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
+and mol_parte = p.amg_code
+and mpf_feva = 'S'
+and mpf_arti = ?
+and occ_dtco > (today - 120)
+union all
+select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+       occ_qmov, occ_qmov-occ_qcon residuo, 
+       '' mol_parte, '' mol_desc, 
+       occ_tipo, occ_code, occ_riga, occ_dtco, oct_cocl, des_clifor,
+       oct_stap
+from ocordic, ocordit, agclifor, mganag f, mggrum gf
+where oct_tipo = occ_tipo and oct_code = occ_code
+and oct_cocl = cod_clifor
+and occ_arti = f.amg_code and f.amg_grum = gf.gmg_code
+and occ_feva = 'S'
+and occ_arti = ?
+and occ_dtco > (today - 120)
+union all
+select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
+       mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
+       mol_parte, p.amg_desc mol_desc, 
+       "OQ", 0, 0, mpf_dfab, 'ND', 'ORDINE QUADRO',
+       '' as oct_stap
+from mpfabbi, mpordil, mganag f, mganag p, mggrum gf
+where mpf_ordl = mol_code
+and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
+and mol_parte = p.amg_code
+and mpf_feva = 'S'
+and mpf_ordl = 1
+and mpf_arti = ?
+ORDER BY occ_dtco desc
 
 
         """
@@ -1402,8 +1442,10 @@ where occ_arti = ? and occ_dtco < TODAY and occ_dtco > (today - 120) order by oc
         results = []
         for row in rows:
             results.append({
+                "occ_tipo": row.occ_tipo,
+                "occ_code": row.occ_code,
                 "occ_dtco": row.occ_dtco,
-                "occ_qcon": row.occ_qcon,
+                "totale": row.totale,
                 "oct_cocl": row.oct_cocl,
                 "des_clifor": row.des_clifor
             })

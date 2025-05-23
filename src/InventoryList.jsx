@@ -521,10 +521,16 @@ const customerOrdersColumns = [
         key: "occ_dtco",
     },
     {
-        title: "Quantità",
-        dataIndex: "occ_qcon",
-        key: "occ_qcon",
+        title: "Tipo",
+        dataIndex: "occ_tipo",
+        key: "occ_tipo",
     },
+    {
+        title: "NrOrd",
+        dataIndex: "occ_code",
+        key: "occ_code",
+    },
+    
     {
         title: "Cliente",
         dataIndex: "oct_cocl",
@@ -534,7 +540,14 @@ const customerOrdersColumns = [
         title: "Ragione Sociale",
         dataIndex: "des_clifor",
         key: "des_clifor",
-    }
+    },
+    {
+        title: "Quantità Cons.",
+        dataIndex: "totale",
+        key: "totale",
+    },
+    
+    
 ];
     // Columns for supplier orders
     const supplierOrdersColumns = [
