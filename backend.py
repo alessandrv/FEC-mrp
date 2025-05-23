@@ -1373,6 +1373,56 @@ select * from ofordit where oft_cofo = ? order by oft_data desc
 
 
 
+@app.get("/customer-orders")
+async def customer_orders(
+    codice: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    
+):
+    """
+/* Ordini clienti passati*/
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        query = """
+select occ_dtco, occ_qcon, oct_cocl, des_clifor from ocordic 
+join ocordit on occ_tipo = oct_tipo and oct_code = occ_code
+join agclifor on oct_cocl = cod_clifor
+where occ_arti = ? and occ_dtco < TODAY and occ_dtco > (today - 120) order by occ_dtco desc
+
+
+        """
+        
+        cursor.execute(query, (codice))
+        rows = cursor.fetchall()
+        
+        results = []
+        for row in rows:
+            results.append({
+                "occ_dtco": row.occ_dtco,
+                "occ_qcon": row.occ_qcon,
+                "oct_cocl": row.oct_cocl,
+                "des_clifor": row.des_clifor
+            })
+        
+        json_content = json.dumps(results, default=str)
+        return Response(content=json_content, media_type="application/json")
+    
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    finally:
+        if cursor:
+            cursor.close()
+        print(f"Total execution time: {time.time() - start_time} seconds")
+
+
+
+
 
 
 @app.get("/fatturato_per_anno")

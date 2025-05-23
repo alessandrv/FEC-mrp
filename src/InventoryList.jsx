@@ -67,6 +67,10 @@ const ArticlesTable = () => {
     // Data and Loading States
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [customerOrdersData, setCustomerOrdersData] = useState([]);
+    const [customerOrdersLoading, setCustomerOrdersLoading] = useState(false);
+    const [customerOrdersModalTitle, setCustomerOrdersModalTitle] = useState("");
+    const [isCustomerOrdersModalVisible, setIsCustomerOrdersModalVisible] = useState(false);
 
     // Modal for Price History
     const [isModalVisible, setIsModalVisible] = useState(false);
@@ -258,6 +262,11 @@ const ArticlesTable = () => {
                 label: "Visualizza Ordini Fornitore",
                 key: "ordini_fornitore",
                 onClick: () => handleSupplierOrders(record.c_articolo, record.d_articolo)
+            },
+            {
+                label: "Visualizza Ordini Cliente",
+                key: "ordini_cliente",
+                onClick: () => handleCustomerOrders(record.c_articolo)
             }
             // Add the new Kiosk option
            
@@ -368,6 +377,16 @@ const ArticlesTable = () => {
         fetchSupplierOrdersData(articleCode);
     };
 
+    const handleCustomerOrders = (articleCode) => {
+        // Open the modal and show loading spinner
+        setIsCustomerOrdersModalVisible(true);
+        setCustomerOrdersLoading(true);
+        setCustomerOrdersModalTitle(`Ordini cliente passati per articolo: ${articleCode}`);
+        setCustomerOrdersData([]); // Clear existing data
+
+        // Fetch customer orders data
+        fetchCustomerOrdersData(articleCode);
+    };
     // Function to fetch supplier orders data
     const fetchSupplierOrdersData = async (articleCode) => {
         try {
@@ -395,7 +414,32 @@ const ArticlesTable = () => {
             setSupplierOrdersLoading(false);
         }
     };
+    const fetchCustomerOrdersData = async (articleCode) => {
+        try {
+            // Fetch data from the backend
+            const response = await axios.get(`${API_BASE_URL}/customer-orders`, {
+                params: { article_code: articleCode },
+            });
 
+            const data = response.data;
+
+            if (!Array.isArray(data) || data.length === 0) {
+                message.info("Nessun ordine cliente passato trovato per questo articolo.");
+                setIsCustomerOrdersModalVisible(false);
+                setCustomerOrdersLoading(false);
+                return;
+            }
+
+            // Process data if necessary
+            setCustomerOrdersData(data);
+        } catch (error) {
+            message.error("Nessun ordine cliente passato trovato per questo articolo.");
+            console.error("Error fetching customer orders data:", error);
+            setIsCustomerOrdersModalVisible(false);
+        } finally {
+            setCustomerOrdersLoading(false);
+        }
+    };
     const relatedColumnsMap = {
         "disponibilita_m_corr": ["dom_mc", "off_mc"],
         "disponibilita_m_succ": ["dom_ms", "off_ms"],
@@ -2700,6 +2744,12 @@ const ArticlesTable = () => {
                         >
                             Ordini fornitore
                         </Menu.Item>
+                        <Menu.Item
+                            key="ordiniCliente"
+                            onClick={() => handleCustomerOrders(record.c_articolo)}
+                        >
+                            Ordini cliente passati
+                        </Menu.Item>
                     </Menu>
                 );
 
@@ -3369,7 +3419,31 @@ const ArticlesTable = () => {
                         />
                     )}
                 </Modal>
-
+                <Modal
+                    title={customerOrdersModalTitle}
+                    visible={isCustomerOrdersModalVisible}
+                    onCancel={() => setIsCustomerOrdersModalVisible(false)}
+                    footer={[
+                        <Button key="close" onClick={() => setIsCustomerOrdersModalVisible(false)}>
+                            Chiudi
+                        </Button>,
+                    ]}
+                    width={800}
+                >
+                    {customerOrdersLoading ? (
+                        <div style={{ textAlign: "center", padding: "50px 0" }}>
+                            <Spin size="large" tip="Caricamento ordini cliente passati..." />
+                        </div>
+                    ) : (
+                        <Table
+                            columns={customerOrdersColumns}
+                            dataSource={customerOrdersData}
+                            rowKey={(record, index) => index}
+                            pagination={{ pageSize: 10 }}
+                            scroll={{ x: "max-content" }}
+                        />
+                    )}
+                </Modal>
                 {/* Modal for Column Selector */}
                 <Modal
                     title="Seleziona Colonne"
