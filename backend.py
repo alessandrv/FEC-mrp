@@ -1404,6 +1404,7 @@ and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
 and mol_parte = p.amg_code
 and mpf_arti = ?
 and occ_dtco > (today - 120)
+and occ_dtco <= today
 union all
 select occ_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
        occ_qmov, occ_qmov-occ_qcon residuo, 
@@ -1416,6 +1417,7 @@ and oct_cocl = cod_clifor
 and occ_arti = f.amg_code and f.amg_grum = gf.gmg_code
 and occ_arti = ?
 and occ_dtco > (today - 120)
+and occ_dtco <= today
 union all
 select mpf_arti, f.amg_desc mpf_desc, f.amg_grum, gf.gmg_desc, 
        mpf_qfab, (mpf_qfab-mpf_qpre) residuo, 
@@ -1443,6 +1445,7 @@ ORDER BY occ_dtco desc
                 "occ_code": row.occ_code,
                 "occ_dtco": row.occ_dtco,
                 "totale": row.totale,
+                "residuo": row.residuo,
                 "oct_cocl": row.oct_cocl,
                 "des_clifor": row.des_clifor
             })

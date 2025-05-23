@@ -542,11 +542,15 @@ const customerOrdersColumns = [
         key: "des_clifor",
     },
     {
-        title: "Quantità Cons.",
+        title: "Totale ordinato",
         dataIndex: "totale",
         key: "totale",
     },
-    
+    {
+        title: "Da consegnare",
+        dataIndex: "residuo",
+        key: "residuo",
+    },
     
 ];
     // Columns for supplier orders
