@@ -519,7 +519,6 @@ const customerOrdersColumns = [
         title: "Data",
         dataIndex: "occ_data",
         key: "occ_data",
-        render: (text) => text ? new Date(text).toLocaleDateString() : "",
     },
     {
         title: "Tipo",
