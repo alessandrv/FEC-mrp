@@ -1443,7 +1443,7 @@ ORDER BY oct_data desc
             results.append({
                 "occ_tipo": row.occ_tipo,
                 "occ_code": row.occ_code,
-                "occ_dtco": row.occ_dtco,
+                "occ_data": row.occ_data,
                 "totale": row.totale,
                 "residuo": row.residuo,
                 "oct_cocl": row.oct_cocl,

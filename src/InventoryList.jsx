@@ -517,8 +517,9 @@ const ArticlesTable = () => {
 const customerOrdersColumns = [
     {
         title: "Data",
-        dataIndex: "occ_dtco",
-        key: "occ_dtco",
+        dataIndex: "occ_data",
+        key: "occ_data",
+        render: (text) => text ? new Date(text).toLocaleDateString() : "",
     },
     {
         title: "Tipo",
