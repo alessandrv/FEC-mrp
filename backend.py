@@ -1402,7 +1402,6 @@ and oct_tipo = occ_tipo and oct_code = occ_code
 and oct_cocl = cod_clifor
 and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
 and mol_parte = p.amg_code
-and mpf_feva = 'S'
 and mpf_arti = ?
 and occ_dtco > (today - 120)
 union all
@@ -1415,7 +1414,6 @@ from ocordic, ocordit, agclifor, mganag f, mggrum gf
 where oct_tipo = occ_tipo and oct_code = occ_code
 and oct_cocl = cod_clifor
 and occ_arti = f.amg_code and f.amg_grum = gf.gmg_code
-and occ_feva = 'S'
 and occ_arti = ?
 and occ_dtco > (today - 120)
 union all
@@ -1428,7 +1426,6 @@ from mpfabbi, mpordil, mganag f, mganag p, mggrum gf
 where mpf_ordl = mol_code
 and mpf_arti = f.amg_code and f.amg_grum = gf.gmg_code
 and mol_parte = p.amg_code
-and mpf_feva = 'S'
 and mpf_ordl = 1
 and mpf_arti = ?
 ORDER BY occ_dtco desc
