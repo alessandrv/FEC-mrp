@@ -1436,7 +1436,7 @@ ORDER BY occ_dtco desc
 
         """
         
-        cursor.execute(query, (codice))
+        cursor.execute(query, (codice, codice, codice))
         rows = cursor.fetchall()
         
         results = []
