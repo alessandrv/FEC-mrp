@@ -559,11 +559,13 @@ const customerOrdersColumns = [
         title: "Totale ordinato",
         dataIndex: "totale",
         key: "totale",
+        render: (text) => Math.floor(text)
     },
     {
         title: "Da consegnare",
         dataIndex: "residuo",
         key: "residuo",
+        render: (text) => Math.floor(text)
     },
     
 ];
