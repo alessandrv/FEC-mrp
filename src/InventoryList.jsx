@@ -2407,23 +2407,23 @@ const customerOrdersColumns = [
         if (!groupName) return;
         
         try {
-            message.loading({ content: 'Caricamento articoli del gruppo...', key: 'groupLoading' });
+            message.loading({ content: 'Caricamento e espansione articoli del gruppo...', key: 'groupLoading' });
             
-            const response = await axios.get(`${API_BASE_URL}/report_groups/${groupName}/articles`);
-            const articleCodes = response.data;
+            const response = await axios.get(`${API_BASE_URL}/report_groups/${groupName}/expanded_articles`);
+            const expandedArticleCodes = response.data;
             
-            console.log(`Fetched ${articleCodes.length} articles for group ${groupName}:`, articleCodes);
+            console.log(`Fetched ${expandedArticleCodes.length} expanded articles for group ${groupName}:`, expandedArticleCodes);
             
             // Find matching articles from main data
             const matchedArticles = data.filter(item => 
-                articleCodes.some(code => 
+                expandedArticleCodes.some(code => 
                     code.toLowerCase() === item.c_articolo.toLowerCase().trim()
                 )
             );
             
             // Create placeholders for missing codes
             const matchedCodes = matchedArticles.map(item => item.c_articolo.toLowerCase().trim());
-            const missingCodes = articleCodes.filter(code => 
+            const missingCodes = expandedArticleCodes.filter(code => 
                 !matchedCodes.includes(code.toLowerCase().trim())
             );
             
@@ -2469,20 +2469,20 @@ const customerOrdersColumns = [
                 });
             } else if (missingCodes.length > 0) {
                 message.success({ 
-                    content: `Trovati ${matchedArticles.length} articoli, ${missingCodes.length} articoli non trovati`,
+                    content: `Trovati ${matchedArticles.length} articoli espansi, ${missingCodes.length} articoli non trovati`,
                     key: 'groupLoading',
                     duration: 5
                 });
             } else {
                 message.success({ 
-                    content: `Trovati ${matchedArticles.length} articoli per il gruppo "${groupName}"`,
+                    content: `Trovati ${matchedArticles.length} articoli espansi per il gruppo "${groupName}"`,
                     key: 'groupLoading' 
                 });
             }
         } catch (error) {
-            console.error(`Error fetching articles for group ${groupName}:`, error);
+            console.error(`Error fetching expanded articles for group ${groupName}:`, error);
             message.error({ 
-                content: `Errore nel recupero degli articoli per il gruppo "${groupName}"`,
+                content: `Errore nel recupero degli articoli espansi per il gruppo "${groupName}"`,
                 key: 'groupLoading' 
             });
         }
@@ -2493,23 +2493,23 @@ const customerOrdersColumns = [
         if (!groupName) return;
         
         try {
-            message.loading({ content: 'Caricamento articoli del gruppo...', key: 'groupLoading' });
+            message.loading({ content: 'Caricamento e espansione articoli del gruppo...', key: 'groupLoading' });
             
-            const response = await axios.get(`${API_BASE_URL}/report_groups/${groupName}/articles`);
-            const articleCodes = response.data;
+            const response = await axios.get(`${API_BASE_URL}/report_groups/${groupName}/expanded_articles`);
+            const expandedArticleCodes = response.data;
             
-            console.log(`Fetched ${articleCodes.length} articles for group ${groupName}:`, articleCodes);
+            console.log(`Fetched ${expandedArticleCodes.length} expanded articles for group ${groupName}:`, expandedArticleCodes);
             
             // Find matching articles from main data
             const matchedArticles = data.filter(item => 
-                articleCodes.some(code => 
+                expandedArticleCodes.some(code => 
                     code.toLowerCase() === item.c_articolo.toLowerCase().trim()
                 )
             );
             
             // Create placeholders for missing codes
             const matchedCodes = matchedArticles.map(item => item.c_articolo.toLowerCase().trim());
-            const missingCodes = articleCodes.filter(code => 
+            const missingCodes = expandedArticleCodes.filter(code => 
                 !matchedCodes.includes(code.toLowerCase().trim())
             );
             
@@ -2554,20 +2554,20 @@ const customerOrdersColumns = [
                 });
             } else if (missingCodes.length > 0) {
                 message.success({ 
-                    content: `Trovati ${matchedArticles.length} articoli, ${missingCodes.length} articoli non trovati`,
+                    content: `Trovati ${matchedArticles.length} articoli espansi, ${missingCodes.length} articoli non trovati`,
                     key: 'groupLoading',
                     duration: 5
                 });
             } else {
                 message.success({ 
-                    content: `Trovati ${matchedArticles.length} articoli per il gruppo "${groupName}"`,
+                    content: `Trovati ${matchedArticles.length} articoli espansi per il gruppo "${groupName}"`,
                     key: 'groupLoading' 
                 });
             }
         } catch (error) {
-            console.error(`Error fetching articles for group ${groupName}:`, error);
+            console.error(`Error fetching expanded articles for group ${groupName}:`, error);
             message.error({ 
-                content: `Errore nel recupero degli articoli per il gruppo "${groupName}"`,
+                content: `Errore nel recupero degli articoli espansi per il gruppo "${groupName}"`,
                 key: 'groupLoading' 
             });
         }
@@ -3069,7 +3069,7 @@ const customerOrdersColumns = [
         setGroupManagementName(groupName);
         
         try {
-            // Fetch articles for the selected group
+            // Fetch original articles for the selected group (not expanded, for editing)
             const response = await axios.get(`${API_BASE_URL}/report_groups/${groupName}/articles`);
             const articles = response.data;
             
@@ -3164,13 +3164,13 @@ const customerOrdersColumns = [
 
         try {
             setIsGroupLoading(true);
-            message.loading({ content: `Caricamento articoli del gruppo ${groupName}...`, key: 'groupFilterLoading' });
+            message.loading({ content: `Caricamento e espansione articoli del gruppo ${groupName}...`, key: 'groupFilterLoading' });
 
-            // Fetch articles for the selected group
-            const response = await axios.get(`${API_BASE_URL}/report_groups/${groupName}/articles`);
-            const articles = response.data;
+            // Fetch expanded articles for the selected group (includes component expansion)
+            const response = await axios.get(`${API_BASE_URL}/report_groups/${groupName}/expanded_articles`);
+            const expandedArticles = response.data;
 
-            if (articles.length === 0) {
+            if (expandedArticles.length === 0) {
                 message.warning({ 
                     content: `Il gruppo "${groupName}" non contiene articoli`,
                     key: 'groupFilterLoading' 
@@ -3180,18 +3180,18 @@ const customerOrdersColumns = [
                 return;
             }
 
-            // Set the group article codes for filtering
-            setGroupArticleCodes(articles);
+            // Set the expanded article codes for filtering
+            setGroupArticleCodes(expandedArticles);
             setIsFilteringByGroup(true);
             
             message.success({ 
-                content: `Tabella filtrata per il gruppo "${groupName}" (${articles.length} articoli)`,
+                content: `Tabella filtrata per il gruppo "${groupName}" (${expandedArticles.length} articoli espansi)`,
                 key: 'groupFilterLoading' 
             });
         } catch (error) {
-            console.error(`Error fetching articles for group ${groupName}:`, error);
+            console.error(`Error fetching expanded articles for group ${groupName}:`, error);
             message.error({ 
-                content: `Errore nel recupero degli articoli per il gruppo "${groupName}"`,
+                content: `Errore nel recupero degli articoli espansi per il gruppo "${groupName}"`,
                 key: 'groupFilterLoading' 
             });
             setIsFilteringByGroup(false);
@@ -3282,7 +3282,7 @@ const customerOrdersColumns = [
                         </Button>
                         {isFilteringByGroup && (
                             <Tag color="blue" style={{ marginRight: 8 }}>
-                                Filtro attivo: {selectedGroup} ({groupArticleCodes.length} articoli)
+                                Filtro attivo: {selectedGroup} ({groupArticleCodes.length} articoli espansi)
                                 <CloseOutlined 
                                     onClick={() => {
                                         setIsFilteringByGroup(false);

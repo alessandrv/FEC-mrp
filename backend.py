@@ -2273,3 +2273,76 @@ async def delete_from_report_group(
                 cursor.close()
             except Exception as e:
                 print(f"Error closing cursor: {str(e)}") 
+
+@app.get("/report_groups/{name}/expanded_articles")
+async def get_expanded_group_articles(name: str):
+    """
+    Retrieves all article codes for a specific report group and expands parent articles
+    into their component articles using the mplegami table.
+    
+    Args:
+        name: The name of the report group to retrieve articles for.
+        
+    Returns:
+        A list of expanded article codes.
+    """
+    start_time = time.time()
+    cursor = None
+    expanded_article_codes = []
+    try:
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+            
+            # First, get the original article codes for the group
+            query = "SELECT art_code FROM report_groups WHERE name = ? ORDER BY art_code"
+            cursor.execute(query, (name,))
+            results = cursor.fetchall()
+            
+            if not results:
+                total_time = time.time() - start_time
+                print(f"Total execution time for getting expanded articles in group {name}: {total_time} seconds")
+                return []
+            
+            # Extract the original article codes
+            original_codes = [row[0] for row in results]
+            
+            # For each original code, check if it has components in mplegami
+            for code in original_codes:
+                # Check if this article is a parent (has components)
+                component_query = "SELECT mpl_figlio FROM mplegami WHERE mpl_padre = ?"
+                cursor.execute(component_query, (code,))
+                component_results = cursor.fetchall()
+                
+                if component_results:
+                    # This article has components, so add the component codes
+                    component_codes = [row[0] for row in component_results]
+                    expanded_article_codes.extend(component_codes)
+                    print(f"Article {code} expanded to components: {component_codes}")
+                else:
+                    # This article has no components, so add the original code
+                    expanded_article_codes.append(code)
+                    print(f"Article {code} has no components, keeping original")
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_expanded_codes = []
+            for code in expanded_article_codes:
+                if code not in seen:
+                    seen.add(code)
+                    unique_expanded_codes.append(code.strip())
+            total_time = time.time() - start_time
+            print(f"Total execution time for getting expanded articles in group {name}: {total_time} seconds")
+            print(f"Original codes: {original_codes}")
+            print(f"Expanded codes: {unique_expanded_codes}")
+        
+        return unique_expanded_codes
+        
+    except Exception as e:
+        print(f"Error getting expanded articles for group {name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+    finally:
+        if cursor is not None:
+            try:
+                cursor.close()
+            except Exception as e:
+                print(f"Error closing cursor: {str(e)}")
