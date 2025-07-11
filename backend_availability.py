@@ -1008,8 +1008,8 @@ async def test_protected_endpoint(current_user: TokenData = Depends(get_current_
         "version": "1.0"
     }
 
-@app.get("/test/orders")
-async def test_orders_endpoint():
+@app.get("/ordini-cliente")
+async def test_orders_endpoint(current_user: TokenData = Depends(get_current_user)):
     """
     Test endpoint to extract order information from ocordit and ocordic tables.
     Returns order code, type, and earliest delivery date.
