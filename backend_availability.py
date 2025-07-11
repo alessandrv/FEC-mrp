@@ -1042,6 +1042,7 @@ async def test_orders_endpoint():
                 THEN TRIM(occ.occ_desc) || ' ' || TRIM(occ.occ_des2)
                 ELSE TRIM(occ.occ_desc)
             END article_description,
+            oct.oct_cocl customer_code,
             agc.des_clifor customer_name
         FROM ocordic occ
         LEFT OUTER JOIN ocordit oct ON occ.occ_tipo = oct.oct_tipo AND occ.occ_code = oct.oct_code
