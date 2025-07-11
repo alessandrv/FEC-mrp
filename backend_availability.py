@@ -1023,17 +1023,23 @@ async def test_orders_endpoint():
         
         # Query to get orders with their earliest delivery date
         # Using MIN to get the earliest date when multiple ocordic rows exist for same order
+        # Calculate days until delivery comparing with today
+        # Informix-compatible syntax
         query = """
-        SELECT 
-            oct.oct_tipo as order_type,
-            oct.oct_code as order_code,
-            oct.oct_data as order_date,
-            oct.oct_cocl as customer_code,
-            oct.oct_stat as order_status,
-            MIN(occ.occ_dtco) as earliest_delivery_date,
-            COUNT(occ.occ_riga) as line_count
+        SELECT FIRST 100
+            oct.oct_tipo order_type,
+            oct.oct_code order_code,
+            oct.oct_data order_date,
+            oct.oct_cocl customer_code,
+            oct.oct_stat order_status,
+            MIN(occ.occ_dtco) earliest_delivery_date,
+            CASE 
+                WHEN MIN(occ.occ_dtco) IS NULL THEN NULL
+                ELSE MIN(occ.occ_dtco) - TODAY
+            END days_until_delivery
         FROM ocordit oct
-        LEFT JOIN ocordic occ ON oct.oct_tipo = occ.occ_tipo AND oct.oct_code = occ.occ_code
+        LEFT OUTER JOIN ocordic occ ON oct.oct_tipo = occ.occ_tipo AND oct.oct_code = occ.occ_code
+        where occ.occ_dtco > today
         GROUP BY 
             oct.oct_tipo, 
             oct.oct_code, 
@@ -1041,7 +1047,6 @@ async def test_orders_endpoint():
             oct.oct_cocl, 
             oct.oct_stat
         ORDER BY oct.oct_data DESC, oct.oct_code DESC
-        LIMIT 100
         """
         
         cursor.execute(query)
