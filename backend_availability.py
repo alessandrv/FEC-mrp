@@ -1021,35 +1021,33 @@ async def test_orders_endpoint():
         conn = get_cached_connection()
         cursor = conn.cursor()
         
-        # Query to get orders with their earliest delivery date
-        # Using MIN to get the earliest date when multiple ocordic rows exist for same order
+        # Query to get individual order lines from ocordic with article details
+        # No grouping - one row per order line
         # Calculate days until delivery comparing with today
         # Informix-compatible syntax
         query = """
         SELECT FIRST 100
-            oct.oct_tipo order_type,
-            oct.oct_code order_code,
-            oct.oct_data order_date,
-            oct.oct_cocl customer_code,
-            agc.des_clifor customer_name,
-            oct.oct_stat order_status,
-            MIN(occ.occ_dtco) earliest_delivery_date,
+            occ.occ_tipo order_type,
+            occ.occ_code order_code,
+            occ.occ_riga order_line,
+            occ.occ_dtco delivery_date,
             CASE 
-                WHEN MIN(occ.occ_dtco) IS NULL THEN NULL
-                ELSE MIN(occ.occ_dtco) - TODAY
-            END days_until_delivery
-        FROM ocordit oct
-        LEFT OUTER JOIN ocordic occ ON oct.oct_tipo = occ.occ_tipo AND oct.oct_code = occ.occ_code
+                WHEN occ.occ_dtco IS NULL THEN NULL
+                ELSE occ.occ_dtco - TODAY
+            END days_until_delivery,
+            occ.occ_arti article_code,
+            occ.occ_qmov quantity,
+            CASE 
+                WHEN occ.occ_des2 IS NOT NULL AND TRIM(occ.occ_des2) != '' 
+                THEN TRIM(occ.occ_desc) || ' ' || TRIM(occ.occ_des2)
+                ELSE TRIM(occ.occ_desc)
+            END article_description,
+            agc.des_clifor customer_name
+        FROM ocordic occ
+        LEFT OUTER JOIN ocordit oct ON occ.occ_tipo = oct.oct_tipo AND occ.occ_code = oct.oct_code
         LEFT OUTER JOIN agclifor agc ON oct.oct_cocl = agc.cod_clifor
-        where occ.occ_dtco > today
-        GROUP BY 
-            oct.oct_tipo, 
-            oct.oct_code, 
-            oct.oct_data, 
-            oct.oct_cocl, 
-            agc.des_clifor,
-            oct.oct_stat
-        ORDER BY oct.oct_data DESC, oct.oct_code DESC
+        WHERE occ.occ_dtco > TODAY
+        ORDER BY occ.occ_dtco ASC, occ.occ_code DESC, occ.occ_riga ASC
         """
         
         cursor.execute(query)
