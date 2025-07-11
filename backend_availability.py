@@ -1031,6 +1031,7 @@ async def test_orders_endpoint():
             oct.oct_code order_code,
             oct.oct_data order_date,
             oct.oct_cocl customer_code,
+            agc.des_clifor customer_name,
             oct.oct_stat order_status,
             MIN(occ.occ_dtco) earliest_delivery_date,
             CASE 
@@ -1039,12 +1040,14 @@ async def test_orders_endpoint():
             END days_until_delivery
         FROM ocordit oct
         LEFT OUTER JOIN ocordic occ ON oct.oct_tipo = occ.occ_tipo AND oct.oct_code = occ.occ_code
+        LEFT OUTER JOIN agclifor agc ON oct.oct_cocl = agc.cod_clifor
         where occ.occ_dtco > today
         GROUP BY 
             oct.oct_tipo, 
             oct.oct_code, 
             oct.oct_data, 
             oct.oct_cocl, 
+            agc.des_clifor,
             oct.oct_stat
         ORDER BY oct.oct_data DESC, oct.oct_code DESC
         """
