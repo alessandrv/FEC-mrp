@@ -1008,6 +1008,97 @@ async def test_protected_endpoint(current_user: TokenData = Depends(get_current_
         "version": "1.0"
     }
 
+@app.get("/test/orders")
+async def test_orders_endpoint():
+    """
+    Test endpoint to extract order information from ocordit and ocordic tables.
+    Returns order code, type, and earliest delivery date.
+    No authentication required.
+    """
+    start_time = time.time()
+    cursor = None
+    try:
+        conn = get_cached_connection()
+        cursor = conn.cursor()
+        
+        # Query to get orders with their earliest delivery date
+        # Using MIN to get the earliest date when multiple ocordic rows exist for same order
+        query = """
+        SELECT 
+            oct.oct_tipo as order_type,
+            oct.oct_code as order_code,
+            oct.oct_data as order_date,
+            oct.oct_cocl as customer_code,
+            oct.oct_stat as order_status,
+            MIN(occ.occ_dtco) as earliest_delivery_date,
+            COUNT(occ.occ_riga) as line_count
+        FROM ocordit oct
+        LEFT JOIN ocordic occ ON oct.oct_tipo = occ.occ_tipo AND oct.oct_code = occ.occ_code
+        GROUP BY 
+            oct.oct_tipo, 
+            oct.oct_code, 
+            oct.oct_data, 
+            oct.oct_cocl, 
+            oct.oct_stat
+        ORDER BY oct.oct_data DESC, oct.oct_code DESC
+        LIMIT 100
+        """
+        
+        cursor.execute(query)
+        rows = cursor.fetchall()
+        
+        if not rows:
+            return {
+                "status": "success",
+                "message": "No orders found",
+                "data": [],
+                "count": 0
+            }
+        
+        # Convert results to list of dictionaries
+        columns = [column[0] for column in cursor.description]
+        results = []
+        
+        for row in rows:
+            order_data = dict(zip(columns, row))
+            
+            # Convert date objects to ISO format strings for JSON serialization
+            for key, value in order_data.items():
+                if hasattr(value, 'isoformat'):  # Handle date/datetime objects
+                    order_data[key] = value.isoformat()
+                elif isinstance(value, Decimal):  # Handle decimal objects
+                    order_data[key] = float(value)
+                elif value is None:
+                    order_data[key] = None
+                else:
+                    order_data[key] = value
+            
+            results.append(order_data)
+        
+        total_time = time.time() - start_time
+        
+        return {
+            "status": "success",
+            "message": f"Retrieved {len(results)} orders successfully",
+            "execution_time": f"{total_time:.3f} seconds",
+            "data": results,
+            "count": len(results)
+        }
+        
+    except Exception as e:
+        print(f"Error in test_orders_endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "status": "error",
+            "message": f"Database error: {str(e)}",
+            "data": [],
+            "count": 0
+        }
+    finally:
+        if cursor is not None:
+            cursor.close()
+
 def get_article_history_query():
     # SQL query with placeholders for the article code
     return """
