@@ -980,6 +980,34 @@ and nvl(amg_fagi,'S') = 'S'
             cursor.close()
         # No need to close the connection when using a connection pool
 
+# Test endpoint
+@app.get("/test")
+async def test_endpoint():
+    """
+    Simple test endpoint to verify the API is working.
+    No authentication required.
+    """
+    return {
+        "status": "success",
+        "message": "API is working correctly!",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0"
+    }
+
+@app.get("/test/protected")
+async def test_protected_endpoint(current_user: TokenData = Depends(get_current_user)):
+    """
+    Test endpoint with authentication to verify token validation is working.
+    Requires valid authentication token.
+    """
+    return {
+        "status": "success",
+        "message": "Protected endpoint is working correctly!",
+        "user": current_user.username,
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": "1.0"
+    }
+
 def get_article_history_query():
     # SQL query with placeholders for the article code
     return """
