@@ -1026,7 +1026,7 @@ async def test_orders_endpoint(current_user: TokenData = Depends(get_current_use
         # Calculate days until delivery comparing with today
         # Informix-compatible syntax
         query = """
-        SELECT FIRST 100
+        SELECT FIRST 2000
             occ.occ_tipo order_type,
             occ.occ_code order_code,
             occ.occ_riga order_line,
