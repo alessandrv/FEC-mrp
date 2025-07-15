@@ -1047,7 +1047,7 @@ async def test_orders_endpoint(current_user: TokenData = Depends(get_current_use
         FROM ocordic occ
         LEFT OUTER JOIN ocordit oct ON occ.occ_tipo = oct.oct_tipo AND occ.occ_code = oct.oct_code
         LEFT OUTER JOIN agclifor agc ON oct.oct_cocl = agc.cod_clifor
-        WHERE occ.oct_stat = "A"
+        WHERE oct.oct_stat = "A" and occ.occ_qmov > 0
         ORDER BY occ.occ_dtco ASC, occ.occ_code DESC, occ.occ_riga ASC
         """
         
