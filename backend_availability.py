@@ -1026,7 +1026,7 @@ async def test_orders_endpoint(current_user: TokenData = Depends(get_current_use
         # Calculate days until delivery comparing with today
         # Informix-compatible syntax
         query = """
-        SELECT FIRST 2000
+        SELECT
             occ.occ_tipo order_type,
             occ.occ_code order_code,
             occ.occ_riga order_line,
@@ -1047,7 +1047,7 @@ async def test_orders_endpoint(current_user: TokenData = Depends(get_current_use
         FROM ocordic occ
         LEFT OUTER JOIN ocordit oct ON occ.occ_tipo = oct.oct_tipo AND occ.occ_code = oct.oct_code
         LEFT OUTER JOIN agclifor agc ON oct.oct_cocl = agc.cod_clifor
-        WHERE occ.occ_dtco > TODAY
+        WHERE occ.oct_stat = "A"
         ORDER BY occ.occ_dtco ASC, occ.occ_code DESC, occ.occ_riga ASC
         """
         
