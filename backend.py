@@ -406,6 +406,40 @@ def get_article_price_query():
         t.oft_data ASC
         
     """
+
+def get_fifo_price_query():
+    # SQL query to get FIFO price data from mpcosdat table
+    return """
+    SELECT
+        cod_data AS date,
+        cod_vald AS price
+    FROM
+        mpcosdat
+    WHERE
+        cod_arti = ?
+        AND cod_voce = 99
+        AND cod_tipo = 'FIF'
+    ORDER BY
+        cod_data ASC
+    """
+
+def get_current_cost_query():
+    # SQL query to get current cost data from mpcosti table
+    return """
+    SELECT
+        coa_data AS date,
+        coa_vald AS price,
+        coa_tipo AS cost_type
+    FROM
+        mpcosti
+    WHERE
+        coa_arti = ?
+        AND coa_voce = 99
+        AND (coa_tipo = 'FIF' OR coa_tipo = 'EFF')
+    ORDER BY
+        coa_data DESC
+    """
+
 @app.get("/articles")
 async def get_articles():
     """
@@ -484,27 +518,45 @@ async def get_article_price(article_code: str):
         with get_connection_from_pool() as conn:
             cursor = conn.cursor()
             
-            # Prepare the query
+            # Get main price data
             query = get_article_price_query()
-            
-            # Execute the query with the article code parameter
             cursor.execute(query, (article_code,))
-            
-            # Fetch all results
             rows = cursor.fetchall()
             
-            # Check if any rows were returned
+            # Get FIFO price data from mpcosdat
+            fifo_query = get_fifo_price_query()
+            
+            # Get current cost data from mpcosti
+            cost_query = get_current_cost_query()
+            
+            # Check if any main price rows were returned
             if not rows:
                 return JSONResponse(
                     content={"message": "Article not found."},
                     status_code=404
                 )
             
-            # Convert the results to a list of dictionaries
+            # Convert the main results to a list of dictionaries
             columns = [column[0] for column in cursor.description]
             results = [
                 dict(zip(columns, row))
                 for row in rows
+            ]
+            
+            # Process FIFO data
+            cursor.execute(fifo_query, (article_code,))
+            fifo_columns = [column[0] for column in cursor.description]
+            fifo_results = [
+                dict(zip(fifo_columns, row))
+                for row in cursor.fetchall()
+            ]
+            
+            # Process cost data
+            cursor.execute(cost_query, (article_code,))
+            cost_columns = [column[0] for column in cursor.description]
+            cost_results = [
+                dict(zip(cost_columns, row))
+                for row in cursor.fetchall()
             ]
             
             # Process data on the backend
@@ -528,6 +580,51 @@ async def get_article_price(article_code: str):
                     'quantity': float(item['quantity']),
                     'valuta': item['valuta'],
                 })
+            
+            # Prepare FIFO data
+            fifoData = []
+            for item in fifo_results:
+                # Ensure the date is in ISO format
+                date_obj = item['date']
+                if isinstance(date_obj, datetime):
+                    date_str = date_obj.isoformat()
+                else:
+                    date_str = str(date_obj)
+
+                fifoData.append({
+                    'date': date_str,
+                    'price': float(item['price']),
+                })
+            
+            # Sort FIFO data by date
+            fifoData.sort(key=lambda x: x['date'])
+            
+            # Process cost data
+            currentFifoCost = None
+            currentEffCost = None
+            
+            for item in cost_results:
+                # Ensure the date is in ISO format
+                date_obj = item['date']
+                if isinstance(date_obj, datetime):
+                    date_str = date_obj.isoformat()
+                else:
+                    date_str = str(date_obj)
+                
+                if item['cost_type'] == 'FIF' and currentFifoCost is None:
+                    currentFifoCost = {
+                        'date': date_str,
+                        'price': float(item['price']),
+                    }
+                elif item['cost_type'] == 'EFF' and currentEffCost is None:
+                    currentEffCost = {
+                        'date': date_str,
+                        'price': float(item['price']),
+                    }
+                
+                # Stop after finding both types
+                if currentFifoCost and currentEffCost:
+                    break
             
             # Sort rawData by date
             rawData.sort(key=lambda x: x['date'])
@@ -558,6 +655,9 @@ async def get_article_price(article_code: str):
             response = {
                 'rawData': rawData,
                 'averageData': averageData,
+                'fifoData': fifoData,
+                'currentFifoCost': currentFifoCost,
+                'currentEffCost': currentEffCost,
                 'valuta': valuta,
                 'maxPriceData': maxPriceData,
                 'minPriceData': minPriceData,

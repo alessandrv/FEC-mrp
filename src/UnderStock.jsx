@@ -150,6 +150,9 @@ const ArticlesTable = () => {
   const [isAverage, setIsAverage] = useState(false);
   const [rawChartData, setRawChartData] = useState([]);
   const [averageChartData, setAverageChartData] = useState([]);
+  const [fifoChartData, setFifoChartData] = useState([]);
+  const [currentFifoCost, setCurrentFifoCost] = useState(null);
+  const [currentEffCost, setCurrentEffCost] = useState(null);
   const [valuta, setValuta] = useState(null);
   const [isOrderHistoryModalOpen, setIsOrderHistoryModalOpen] = useState(false);
   const [orderHistoryData, setOrderHistoryData] = useState([]);
@@ -322,6 +325,9 @@ const ArticlesTable = () => {
     setChartData([]); // Clear existing chart data
     setRawChartData([]);
     setAverageChartData([]);
+    setFifoChartData([]);
+    setCurrentFifoCost(null);
+    setCurrentEffCost(null);
     setMaxPriceData(null);
     setMinPriceData(null);
     setValuta(null);
@@ -347,6 +353,9 @@ const ArticlesTable = () => {
       const {
         rawData,
         averageData,
+        fifoData,
+        currentFifoCost,
+        currentEffCost,
         valuta,
         maxPriceData,
         minPriceData,
@@ -372,15 +381,18 @@ const ArticlesTable = () => {
       console.time('setState time');
       setRawChartData(rawData);
       setAverageChartData(averageData);
-
-      // Initially show raw data
-      setChartData(rawData);
+      setFifoChartData(fifoData || []);
+      setCurrentFifoCost(currentFifoCost);
+      setCurrentEffCost(currentEffCost);
 
       // Set max and min price data
       setMaxPriceData(maxPriceData);
       setMinPriceData(minPriceData);
 
       setValuta(valuta);
+      
+      // Update chart data with combined dataset
+      updateChartData(false, rawData, fifoData, currentFifoCost, currentEffCost);
       console.timeEnd('setState time');
 
       // Measure time to set chart loading
@@ -411,7 +423,18 @@ const ArticlesTable = () => {
     updateChartData(average);
   };
 
-  const updateChartData = (average) => {
+  const updateChartData = (average, rawData = null, fifoData = null, currentFifo = null, currentEff = null) => {
+    console.log('updateChartData called with average:', average);
+    
+    // Use passed data or fall back to state variables
+    const dataToUse = rawData || rawChartData;
+    const fifoToUse = fifoData || fifoChartData;
+    const currentFifoToUse = currentFifo || currentFifoCost;
+    const currentEffToUse = currentEff || currentEffCost;
+    
+    console.log('dataToUse length:', dataToUse.length);
+    console.log('fifoToUse length:', fifoToUse.length);
+    
     if (average) {
       // In average mode, dates represent months
       setChartData(averageChartData);
@@ -431,17 +454,71 @@ const ArticlesTable = () => {
       setMinPriceData(minPrice);
     } else {
       // In raw mode, dates represent individual dates
-      setChartData(rawChartData);
+      // Create combined dataset with FIFO data and current costs
+      const combinedData = [...dataToUse];
+      
+      // Add FIFO data points
+      fifoToUse.forEach(fifoItem => {
+        const existingIndex = combinedData.findIndex(item => item.date === fifoItem.date);
+        if (existingIndex >= 0) {
+          combinedData[existingIndex].fifoPrice = fifoItem.price;
+        } else {
+          combinedData.push({
+            date: fifoItem.date,
+            price: fifoItem.price, // Use FIFO price as main price for this point
+            quantity: 0, // Ensure quantity property exists
+            valuta: valuta, // Ensure valuta property exists
+            fifoPrice: fifoItem.price
+          });
+        }
+      });
+      
+      // Add current FIFO cost as a single point
+      if (currentFifoToUse) {
+        const existingIndex = combinedData.findIndex(item => item.date === currentFifoToUse.date);
+        if (existingIndex >= 0) {
+          combinedData[existingIndex].currentFifo = currentFifoToUse.price;
+        } else {
+          combinedData.push({
+            date: currentFifoToUse.date,
+            price: currentFifoToUse.price, // Use current FIFO price as main price for this point
+            quantity: 0, // Ensure quantity property exists
+            valuta: valuta, // Ensure valuta property exists
+            currentFifo: currentFifoToUse.price
+          });
+        }
+      }
+      
+      // Add current effective cost as a single point
+      if (currentEffToUse) {
+        const existingIndex = combinedData.findIndex(item => item.date === currentEffToUse.date);
+        if (existingIndex >= 0) {
+          combinedData[existingIndex].currentEff = currentEffToUse.price;
+        } else {
+          combinedData.push({
+            date: currentEffToUse.date,
+            price: currentEffToUse.price, // Use current EFF price as main price for this point
+            quantity: 0, // Ensure quantity property exists
+            valuta: valuta, // Ensure valuta property exists
+            currentEff: currentEffToUse.price
+          });
+        }
+      }
+      
+      // Sort by date
+      combinedData.sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      setChartData(combinedData);
 
       // Compute max and min values for raw data
-      const maxPrice = rawChartData.reduce(
+      const maxPrice = dataToUse.reduce(
         (max, item) => (item.price > max.price ? item : max),
-        rawChartData[0]
+        dataToUse[0]
       );
 
-      const minPrice = rawChartData.reduce(
+      const minPrice = dataToUse.reduce(
         (min, item) => (item.price < min.price ? item : min),
-        rawChartData[0]
+        dataToUse[0]
       );
 
       setMaxPriceData(maxPrice);
@@ -784,6 +861,16 @@ const ArticlesTable = () => {
         <Box>
           <strong>Min:</strong> {minPriceData.price.toFixed(2)} - {new Date(minPriceData.date).toLocaleDateString()}
         </Box>
+        {currentFifoCost && (
+          <Box>
+            <strong>Costo FIFO Attuale:</strong> {currentFifoCost.price.toFixed(2)} - {new Date(currentFifoCost.date).toLocaleDateString()}
+          </Box>
+        )}
+        {currentEffCost && (
+          <Box>
+            <strong>Costo Effettivo:</strong> {currentEffCost.price.toFixed(2)} - {new Date(currentEffCost.date).toLocaleDateString()}
+          </Box>
+        )}
 
         <FormControlLabel
           control={
@@ -912,6 +999,36 @@ const ArticlesTable = () => {
                     stroke="#8884d8"
                     activeDot={{ r: 8 }}
                   />
+                  {fifoChartData.length > 0 && (
+                    <Line
+                      type="monotone"
+                      dataKey="fifoPrice"
+                      name="Prezzo FIFO"
+                      stroke="#ff7300"
+                      strokeDasharray="5 5"
+                      activeDot={{ r: 6 }}
+                    />
+                  )}
+                  {currentFifoCost && (
+                    <Line
+                      type="monotone"
+                      dataKey="currentFifo"
+                      name="Costo FIFO Attuale"
+                      stroke="#00ff00"
+                      strokeWidth={3}
+                      activeDot={{ r: 8 }}
+                    />
+                  )}
+                  {currentEffCost && (
+                    <Line
+                      type="monotone"
+                      dataKey="currentEff"
+                      name="Costo Effettivo"
+                      stroke="#ff0000"
+                      strokeWidth={3}
+                      activeDot={{ r: 8 }}
+                    />
+                  )}
                   {/* Include the custom legend */}
                   {maxPriceData && minPriceData && (
                     <Legend

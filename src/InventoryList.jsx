@@ -15,7 +15,6 @@ import {
     Radio,
     Tooltip as AntTooltip,
     Button,
-    Switch,
     Typography,
     Alert,
     Select,
@@ -82,6 +81,9 @@ const ArticlesTable = () => {
     const [isAverage, setIsAverage] = useState(false);
     const [rawChartData, setRawChartData] = useState([]);
     const [averageChartData, setAverageChartData] = useState([]);
+    const [fifoChartData, setFifoChartData] = useState([]);
+    const [currentFifoCost, setCurrentFifoCost] = useState(null);
+    const [currentEffCost, setCurrentEffCost] = useState(null);
     const [valuta, setValuta] = useState(null);
 
     // Modal for Order History
@@ -168,10 +170,7 @@ const ArticlesTable = () => {
     const debugPatternMatch = (text, pattern) => {
         const trimmedText = text.trim();
         const regex = wildcardToRegex(pattern);
-        console.log(`Pattern: ${pattern}`);
-        console.log(`Regex: ${regex}`);
-        console.log(`Text: ${trimmedText}`);
-        console.log(`Match: ${regex.test(trimmedText)}`);
+        
         return regex.test(trimmedText);
     };
 
@@ -625,11 +624,14 @@ const customerOrdersColumns = [
         // Open the modal and show loading spinner
         setIsModalVisible(true);
         setChartLoading(true);
-        setModalTitle(`Storico prezzi per aticolo: ${articleCode}`);
+        setModalTitle(`Storico prezzi per articolo: ${articleCode}`);
         setIsAverage(false); // Reset checkbox state
         setChartData([]); // Clear existing chart data
         setRawChartData([]);
         setAverageChartData([]);
+        setFifoChartData([]);
+        setCurrentFifoCost(null);
+        setCurrentEffCost(null);
         setMaxPriceData(null);
         setMinPriceData(null);
         setValuta(null);
@@ -654,6 +656,9 @@ const customerOrdersColumns = [
             const {
                 rawData,
                 averageData,
+                fifoData,
+                currentFifoCost,
+                currentEffCost,
                 valuta,
                 maxPriceData,
                 minPriceData,
@@ -675,15 +680,25 @@ const customerOrdersColumns = [
             console.time('setState time');
             setRawChartData(rawData);
             setAverageChartData(averageData);
+            setFifoChartData(fifoData || []);
+            setCurrentFifoCost(currentFifoCost);
+            setCurrentEffCost(currentEffCost);
 
-            // Initially show raw data
-            setChartData(rawData);
-
-            // Set max and min price data
+            // Set max and min price data from backend
             setMaxPriceData(maxPriceData);
             setMinPriceData(minPriceData);
 
             setValuta(valuta);
+            
+            // Update chart data with combined dataset
+            console.log('Raw chart data:', rawChartData);
+            console.log('FIFO chart data:', fifoChartData);
+            console.log('Current FIFO cost:', currentFifoCost);
+            console.log('Current EFF cost:', currentEffCost);
+            console.log('Setting currentEffCost state to:', currentEffCost);
+            
+            // Call updateChartData directly with the current data
+            updateChartData(false, rawData, fifoData, currentFifoCost, currentEffCost);
             console.timeEnd('setState time');
 
             // Measure time to set chart loading
@@ -707,44 +722,157 @@ const customerOrdersColumns = [
     const handleCheckboxChange = (e) => {
         const average = e.target.checked;
         setIsAverage(average);
-        updateChartData(average);
+        updateChartData(average, rawChartData, fifoChartData, currentFifoCost, currentEffCost);
     };
 
-    const updateChartData = (average) => {
+    const updateChartData = (average, rawData = null, fifoData = null, currentFifo = null, currentEff = null) => {
+        // Use passed data or fall back to state variables
+        const dataToUse = rawData || rawChartData;
+        const fifoToUse = fifoData || fifoChartData;
+        const currentFifoToUse = currentFifo || currentFifoCost;
+        const currentEffToUse = currentEff || currentEffCost;
+        
         if (average) {
-            // In average mode, dates represent months
-            setChartData(averageChartData);
+            // In average mode, create combined dataset with averaged FIFO data
+            const combinedAverageData = [...averageChartData];
+            
+            // Create monthly averaged FIFO data independently
+            const fifoMonthlyData = {};
+            fifoToUse.forEach(fifoItem => {
+                const date = new Date(fifoItem.date);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                
+                if (!fifoMonthlyData[monthKey]) {
+                    fifoMonthlyData[monthKey] = {
+                        total: 0,
+                        count: 0,
+                        dates: []
+                    };
+                }
+                fifoMonthlyData[monthKey].total += fifoItem.price;
+                fifoMonthlyData[monthKey].count += 1;
+                fifoMonthlyData[monthKey].dates.push(fifoItem.date);
+            });
+            
+            // Add averaged FIFO data as independent data points
+            Object.keys(fifoMonthlyData).forEach(monthKey => {
+                const monthData = fifoMonthlyData[monthKey];
+                const averageFifoPrice = monthData.total / monthData.count;
+                
+                // Always add as a new data point, don't try to merge with base price data
+                combinedAverageData.push({
+                    date: monthKey,
+                    price: null, // Base price is null for FIFO-only months
+                    quantity: 0,
+                    valuta: valuta,
+                    fifoPrice: averageFifoPrice
+                });
+            });
+            
+            // Add current FIFO cost as part of FIFO data (same color/line)
+            if (currentFifoToUse) {
+                const currentFifoDate = new Date(currentFifoToUse.date);
+                const currentFifoMonthKey = `${currentFifoDate.getFullYear()}-${String(currentFifoDate.getMonth() + 1).padStart(2, '0')}`;
+                
+                const existingIndex = combinedAverageData.findIndex(item => item.date === currentFifoMonthKey);
+                if (existingIndex >= 0) {
+                    combinedAverageData[existingIndex].fifoPrice = currentFifoToUse.price;
+                } else {
+                    combinedAverageData.push({
+                        date: currentFifoMonthKey,
+                        price: null,
+                        quantity: 0,
+                        valuta: valuta,
+                        fifoPrice: currentFifoToUse.price
+                    });
+                }
+            }
+            
+            if (currentEffToUse) {
+                const currentEffDate = new Date(currentEffToUse.date);
+                const currentEffMonthKey = `${currentEffDate.getFullYear()}-${String(currentEffDate.getMonth() + 1).padStart(2, '0')}`;
+                
+                const existingIndex = combinedAverageData.findIndex(item => item.date === currentEffMonthKey);
+                if (existingIndex >= 0) {
+                    combinedAverageData[existingIndex].currentEff = currentEffToUse.price;
+                } else {
+                    combinedAverageData.push({
+                        date: currentEffMonthKey,
+                        price: null,
+                        quantity: 0,
+                        valuta: valuta,
+                        currentEff: currentEffToUse.price
+                    });
+                }
+            }
+            
+            // Sort by date
+            combinedAverageData.sort((a, b) => new Date(a.date + '-01') - new Date(b.date + '-01'));
+            
+            setChartData(combinedAverageData);
 
-            // Compute max and min values for average data
-            const maxPriceData = averageChartData.reduce(
-                (max, item) => (item.price > max.price ? item : max),
-                averageChartData[0]
-            );
-
-            const minPriceData = averageChartData.reduce(
-                (min, item) => (item.price < min.price ? item : min),
-                averageChartData[0]
-            );
-
-            setMaxPriceData(maxPriceData);
-            setMinPriceData(minPriceData);
+            // Don't recalculate max/min values - keep the ones from backend
+            // The backend already provides the correct max/min values for raw data
         } else {
             // In raw mode, dates represent individual dates
-            setChartData(rawChartData);
+            // Create combined dataset with FIFO data and current costs
+            const combinedData = [...dataToUse];
+            
+            // Add FIFO data points (including current FIFO cost)
+            fifoToUse.forEach(fifoItem => {
+                const existingIndex = combinedData.findIndex(item => item.date === fifoItem.date);
+                if (existingIndex >= 0) {
+                    combinedData[existingIndex].fifoPrice = fifoItem.price;
+                } else {
+                    combinedData.push({
+                        date: fifoItem.date,
+                        price: null, // Don't set main price for FIFO-only points
+                        quantity: 0, // Ensure quantity property exists
+                        valuta: valuta, // Ensure valuta property exists
+                        fifoPrice: fifoItem.price
+                    });
+                }
+            });
+            
+            // Add current FIFO cost as part of FIFO data (same color/line)
+            if (currentFifoToUse) {
+                const existingIndex = combinedData.findIndex(item => item.date === currentFifoToUse.date);
+                if (existingIndex >= 0) {
+                    combinedData[existingIndex].fifoPrice = currentFifoToUse.price;
+                } else {
+                    combinedData.push({
+                        date: currentFifoToUse.date,
+                        price: null, // Don't set main price for current FIFO-only points
+                        quantity: 0, // Ensure quantity property exists
+                        valuta: valuta, // Ensure valuta property exists
+                        fifoPrice: currentFifoToUse.price
+                    });
+                }
+            }
+            
+            // Add current effective cost as a single point
+            if (currentEffToUse) {
+                const existingIndex = combinedData.findIndex(item => item.date === currentEffToUse.date);
+                if (existingIndex >= 0) {
+                    combinedData[existingIndex].currentEff = currentEffToUse.price;
+                } else {
+                    combinedData.push({
+                        date: currentEffToUse.date,
+                        price: null, // Don't set main price for current EFF-only points
+                        quantity: 0, // Ensure quantity property exists
+                        valuta: valuta, // Ensure valuta property exists
+                        currentEff: currentEffToUse.price
+                    });
+                }
+            }
+            
+            // Sort by date
+            combinedData.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            setChartData(combinedData);
 
-            // Compute max and min values for raw data
-            const maxPriceData = rawChartData.reduce(
-                (max, item) => (item.price > max.price ? item : max),
-                rawChartData[0]
-            );
-
-            const minPriceData = rawChartData.reduce(
-                (min, item) => (item.price < min.price ? item : min),
-                rawChartData[0]
-            );
-
-            setMaxPriceData(maxPriceData);
-            setMinPriceData(minPriceData);
+            // Don't recalculate max/min values - keep the ones from backend
+            // The backend already provides the correct max/min values for raw data
         }
     };
     // Handle search text change for c_articolo
@@ -2784,7 +2912,7 @@ const customerOrdersColumns = [
                             key="displayModal"
                             onClick={() => handleAPClick(record.c_articolo)}
                         >
-                            Storico Prezzi
+                            Storico Prezzi Acquisto
                         </Menu.Item>
                         <Menu.Item
                             key="storicoOrdini"
@@ -2819,26 +2947,55 @@ const customerOrdersColumns = [
 
 
     // Custom Legend Component
-    const CustomLegend = () => {
+        const CustomLegend = () => {
         return (
-            <div style={{ textAlign: "left", marginLeft: 10 }}>
+            <div style={{ 
+                display: "flex", 
+                flexDirection: "column", 
+                gap: "15px"
+            }}>
+                
+                
                 <div>
-                    <strong>Valuta:</strong> {valuta}
+                    <strong>Valuta:</strong> {valuta || 'N/A'}
                 </div>
-                <div>
-                    <strong>Max:</strong> {maxPriceData.price.toFixed(2)} - {new Date(maxPriceData.date).toLocaleDateString()}
-                </div>
-                <div>
-                    <strong>Min:</strong> {minPriceData.price.toFixed(2)} - {new Date(minPriceData.date).toLocaleDateString()}
+                
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    {maxPriceData && maxPriceData.price && (
+                        <div style={{ fontSize: "12px" }}>
+                            <strong>Prezzo Max:</strong><br/>
+                            {maxPriceData.price.toFixed(2)} - {new Date(maxPriceData.date).toLocaleDateString()}
+                        </div>
+                    )}
+                    {minPriceData && minPriceData.price && (
+                        <div style={{ fontSize: "12px" }}>
+                            <strong>Prezzo Min:</strong><br/>
+                            {minPriceData.price.toFixed(2)} - {new Date(minPriceData.date).toLocaleDateString()}
+                        </div>
+                    )}
+                    {currentFifoCost && currentFifoCost.price && (
+                        <div style={{ fontSize: "12px" }}>
+                            <strong>Costo FIFO Attuale:</strong><br/>
+                            {currentFifoCost.price.toFixed(2)} - {new Date(currentFifoCost.date).toLocaleDateString()}
+                        </div>
+                    )}
+                    {currentEffCost && currentEffCost.price && (
+                        <div style={{ fontSize: "12px" }}>
+                            <strong>Costo Effettivo:</strong><br/>
+                            {currentEffCost.price.toFixed(2)} - {new Date(currentEffCost.date).toLocaleDateString()}
+                        </div>
+                    )}
+                    {console.log('CustomLegend - currentEffCost:', currentEffCost)}
                 </div>
 
-                <Checkbox
-                    checked={isAverage}
-                    onChange={handleCheckboxChange}
-                    style={{ marginBottom: 10 }}
-                >
-                    Media per mese
-                </Checkbox>
+                <div style={{ textAlign: "center" }}>
+                    <Checkbox
+                        checked={isAverage}
+                        onChange={handleCheckboxChange}
+                    >
+                        Media per mese
+                    </Checkbox>
+                </div>
             </div>
         );
     };
@@ -3353,11 +3510,15 @@ const customerOrdersColumns = [
                         setMinPriceData(null);
                         setRawChartData([]);
                         setAverageChartData([]);
+                        setFifoChartData([]);
+                        setCurrentFifoCost(null);
+                        setCurrentEffCost(null);
                         setIsAverage(false);
                         setValuta(null);
                     }}
                     footer={null}
-                    width={900}
+                    width={1100}
+                    style={{ top: '50%', transform: 'translateY(-50%)' }}
                 >
                     {chartLoading ? (
                         <div style={{ textAlign: "center", padding: "50px 0" }}>
@@ -3365,57 +3526,105 @@ const customerOrdersColumns = [
                     indicator={<LoadingOutlined spin />}
                     size="large" tip="Caricamento storico prezzi..." />
                         </div>
-                    ) : (
-                        <div>
-                            <div style={{ display: "flex", justifyContent: "center" }}>
-                                <LineChart
-                                    width={800}
-                                    height={500}
-                                    data={chartData}
-                                    margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis
-                                        dataKey="date"
-                                        angle={-45}
-                                        textAnchor="end"
-                                        tickFormatter={(dateValue) => {
-                                            if (isAverage) {
-                                                // In average mode, dateValue represents a month string like '2023-10'
-                                                const date = new Date(dateValue + '-01'); // Append '-01' to create a valid date
-                                                return date.toLocaleString('default', { month: 'short', year: 'numeric' });
-                                            } else {
-                                                // In raw mode, dateValue is an ISO date string or Date object
-                                                const date = new Date(dateValue);
-                                                return date.toLocaleDateString(); // Format as 'MM/DD/YYYY' or your locale format
-                                            }
-                                        }}
-                                    />
-                                    <YAxis />
-                                    <Tooltip
-                                        labelFormatter={(dateStr) => {
-                                            const date = new Date(dateStr);
-                                            return date.toLocaleDateString();
-                                        }}
-                                    />
-                                    <Line
-                                        type="monotone"
-                                        dataKey="price"
-                                        name={`Prezzo (${valuta})`}
-                                        stroke="#8884d8"
-                                        activeDot={{ r: 8 }}
-                                    />
-                                    {/* Include the custom legend */}
-                                    {maxPriceData && minPriceData && (
-                                        <Legend
-                                            verticalAlign="middle"
-                                            align="right"
-                                            layout="vertical"
-                                            content={<CustomLegend />}
-                                        />
-                                    )}
-                                </LineChart>
+                                        ) : chartData && chartData.length > 0 ? (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "600px" }}>
+                            <div style={{ display: "flex", gap: "20px" }}>
+                                {/* Charts Section */}
+                                <div style={{ display: "flex", flexDirection: "column", gap: "20px", flex: 1 }}>
+                                    {/* Base Price Chart */}
+                                    <div>
+                                        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>Prezzo Base</h3>
+                                        <LineChart
+                                            width={800}
+                                            height={300}
+                                            data={isAverage ? averageChartData.filter(item => item.price !== null) : chartData.filter(item => item.price !== null)}
+                                            margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis
+                                                dataKey="date"
+                                                angle={-45}
+                                                textAnchor="end"
+                                                tickFormatter={(dateValue) => {
+                                                    if (isAverage) {
+                                                        const date = new Date(dateValue + '-01');
+                                                        return date.toLocaleString('default', { month: 'short', year: 'numeric' });
+                                                    } else {
+                                                        const date = new Date(dateValue);
+                                                        return date.toLocaleDateString();
+                                                    }
+                                                }}
+                                            />
+                                            <YAxis />
+                                            <Tooltip
+                                                labelFormatter={(dateStr) => {
+                                                    const date = new Date(dateStr);
+                                                    return date.toLocaleDateString();
+                                                }}
+                                            />
+                                            <Line
+                                                type="monotone"
+                                                dataKey="price"
+                                                name={`Prezzo (${valuta})`}
+                                                stroke="#8884d8"
+                                                activeDot={{ r: 8 }}
+                                            />
+                                        </LineChart>
+                                    </div>
+
+                                    {/* FIFO Chart */}
+                                    <div>
+                                        <h3 style={{ textAlign: "center", marginBottom: "10px" }}>Prezzo FIFO</h3>
+                                        <LineChart
+                                            width={800}
+                                            height={300}
+                                            data={chartData.filter(item => item.fifoPrice !== undefined)}
+                                            margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+                                        >
+                                            <CartesianGrid strokeDasharray="3 3" />
+                                            <XAxis
+                                                dataKey="date"
+                                                angle={-45}
+                                                textAnchor="end"
+                                                tickFormatter={(dateValue) => {
+                                                    if (isAverage) {
+                                                        const date = new Date(dateValue + '-01');
+                                                        return date.toLocaleString('default', { month: 'short', year: 'numeric' });
+                                                    } else {
+                                                        const date = new Date(dateValue);
+                                                        return date.toLocaleDateString();
+                                                    }
+                                                }}
+                                            />
+                                            <YAxis />
+                                            <Tooltip
+                                                labelFormatter={(dateStr) => {
+                                                    const date = new Date(dateStr);
+                                                    return date.toLocaleDateString();
+                                                }}
+                                            />
+                                                                                    {fifoChartData && fifoChartData.length > 0 && (
+                                            <Line
+                                                type="monotone"
+                                                dataKey="fifoPrice"
+                                                name="Prezzo FIFO"
+                                                stroke="#ff7300"
+                                                activeDot={{ r: 1}}
+                                            />
+                                        )}
+                                        </LineChart>
+                                    </div>
+                                </div>
+
+                                {/* Legend Section - Right Side */}
+                                <div style={{ width: "250px", flexShrink: 0, display: "flex", alignItems: "center" }}>
+                                    <CustomLegend />
+                                </div>
                             </div>
+                        </div>
+                    ) : (
+                        <div style={{ textAlign: "center", padding: "50px 0" }}>
+                            <p>Nessun dato disponibile per questo articolo.</p>
                         </div>
                     )}
                 </Modal>
