@@ -927,32 +927,95 @@ const customerOrdersColumns = [
             key: "c_articolo",
             render: (text) => <strong>{text}</strong>,
             width: 100,
-            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
-                <div style={{ padding: 8 }}>
-                    <Input
-                        placeholder="Esempi: 0P*, *0P, *0P*, 0P*AC, 0AC*MF"
-                        value={selectedKeys[0]}
-                        onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-                        onPressEnter={() => handleSearch(selectedKeys, confirm)}
-                        style={{ marginBottom: 8, display: "block" }}
-                    />
-                    <div style={{ marginBottom: 8, fontSize: '12px', color: '#666' }}>
-                        Esempi: 0P*, *0P, *0P*, 0P*AC, 0AC*MF
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => {
+                const currentValue = selectedKeys[0] || '';
+                
+                const formatPattern = (type) => {
+                    let cleanValue = currentValue;
+                    
+                    // Remove existing wildcards at start/end (but keep internal ones)
+                    cleanValue = cleanValue.replace(/^\*+/, '').replace(/\*+$/, '');
+                    
+                    switch (type) {
+                        case 'starts':
+                            return cleanValue + '*';
+                        case 'ends':
+                            return '*' + cleanValue;
+                        case 'contains':
+                            return '*' + cleanValue + '*';
+                        case 'exact':
+                            return cleanValue;
+                        default:
+                            return cleanValue;
+                    }
+                };
+                
+                const handlePatternButton = (type) => {
+                    const formattedValue = formatPattern(type);
+                    setSelectedKeys(formattedValue ? [formattedValue] : []);
+                };
+                
+                return (
+                    <div style={{ padding: 8 }}>
+                        <Input
+                            placeholder="Inserisci codice articolo..."
+                            value={currentValue}
+                            onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+                            onPressEnter={() => handleSearch(selectedKeys, confirm)}
+                            style={{ marginBottom: 8, display: "block" }}
+                        />
+                        
+                        {/* Helper buttons */}
+                        <div style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('starts')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Inizia con
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('ends')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Finisce con
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('contains')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Contiene
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('exact')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Esatto
+                            </Button>
+                        </div>
+                        
+                        <div style={{ marginBottom: 8, fontSize: '11px', color: '#666' }}>
+                            <strong>Esempi avanzati:</strong> 0P*, *0P, *0P*, 0P*AC, 0AC*MF
+                        </div>
+                        
+                        <Button
+                            type="primary"
+                            onClick={() => handleSearch(selectedKeys, confirm)}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 150, marginRight: 8 }}
+                        >
+                            Cerca
+                        </Button>
+                        <Button onClick={() => handleReset(clearFilters, confirm)} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
                     </div>
-                    <Button
-                        type="primary"
-                        onClick={() => handleSearch(selectedKeys, confirm)}
-                        icon={<SearchOutlined />}
-                        size="small"
-                        style={{ width: 150, marginRight: 8 }}
-                    >
-                        Cerca
-                    </Button>
-                    <Button onClick={() => handleReset(clearFilters, confirm)} size="small" style={{ width: 90 }}>
-                        Reset
-                    </Button>
-                </div>
-            ),
+                );
+            },
             filterIcon: (filtered) => (
                 <SearchOutlined
                     style={{
