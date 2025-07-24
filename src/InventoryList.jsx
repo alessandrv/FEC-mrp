@@ -881,9 +881,10 @@ const customerOrdersColumns = [
         setSearchText(selectedKeys[0]);
     };
 
-    const handleReset = (clearFilters) => {
+    const handleReset = (clearFilters, confirm) => {
         clearFilters();
         setSearchText("");
+        confirm();
     };
 
     // Calculate current month's availability
@@ -947,7 +948,7 @@ const customerOrdersColumns = [
                     >
                         Cerca
                     </Button>
-                    <Button onClick={() => handleReset(clearFilters)} size="small" style={{ width: 90 }}>
+                    <Button onClick={() => handleReset(clearFilters, confirm)} size="small" style={{ width: 90 }}>
                         Reset
                     </Button>
                 </div>
@@ -988,7 +989,7 @@ const customerOrdersColumns = [
                         >
                             Applica
                         </Button>
-                        <Button onClick={() => handleReset(clearFilters)} size="small" style={{ width: 90 }}>
+                        <Button onClick={() => handleReset(clearFilters, confirm)} size="small" style={{ width: 90 }}>
                             Reset
                         </Button>
                     </div>
@@ -1037,7 +1038,7 @@ const customerOrdersColumns = [
                     >
                         Cerca
                     </Button>
-                    <Button onClick={() => handleReset(clearFilters)} size="small" style={{ width: 90 }}>
+                    <Button onClick={() => handleReset(clearFilters, confirm)} size="small" style={{ width: 90 }}>
                         Reset
                     </Button>
                 </div>
@@ -3569,6 +3570,7 @@ const customerOrdersColumns = [
                                                 stroke="#8884d8"
                                                 activeDot={{ r: 8 }}
                                             />
+                                            
                                         </LineChart>
                                     </div>
 

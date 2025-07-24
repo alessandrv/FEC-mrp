@@ -406,7 +406,28 @@ def get_article_price_query():
         t.oft_data ASC
         
     """
-
+def get_price_difference_percentage_query():
+    return """
+SELECT DISTINCT
+    c1.ofc_arti AS article_code,
+    MIN(c1.ofc_preu) AS min_price,
+    MAX(c1.ofc_preu) AS max_price,
+    ROUND(((MAX(c1.ofc_preu) - MIN(c1.ofc_preu)) / MIN(c1.ofc_preu) * 100), 2) AS price_increase_percent,
+    MIN(t1.oft_data) AS first_order_date,
+    MAX(t1.oft_data) AS last_order_date
+FROM
+    ofordic c1
+    INNER JOIN ofordit t1 ON c1.ofc_code = t1.oft_code
+WHERE
+    c1.ofc_tipo != 'O'
+    AND c1.ofc_preu > 0
+GROUP BY
+    c1.ofc_arti
+HAVING
+    ((MAX(c1.ofc_preu) - MIN(c1.ofc_preu)) / MIN(c1.ofc_preu) * 100) >= 100
+ORDER BY
+    price_increase_percent DESC
+"""
 def get_fifo_price_query():
     # SQL query to get FIFO price data from mpcosdat table
     return """
