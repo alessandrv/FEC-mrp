@@ -1120,7 +1120,7 @@ const customerOrdersColumns = [
             title: "Fornitore",
             dataIndex: "fornitore",
             key: "fornitore",
-                        width: 100,
+                        width: 300,
 
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
                 <div style={{ padding: 8 }}>
@@ -1166,16 +1166,20 @@ const customerOrdersColumns = [
             title: "LT", // Customize for another field
             dataIndex: "lt",
             key: "lt",
+            width: 30,
         },
         {
             title: "SCRT", // Customize for another field
             dataIndex: "scrt",
             key: "scrt",
+            width: 60,
         },
         {
             title: "Dep. 1", // Customize for another field
             dataIndex: "giac_d01",
             key: "giac_d01",
+            width: 60,
+
         },
         //{
         //    title: "Dep. 20", // Customize for another field
@@ -1186,26 +1190,31 @@ const customerOrdersColumns = [
             title: "Dep. 32", // Customize for another field
             dataIndex: "giac_d32",
             key: "giac_d32",
+            width: 60,
         },
         {
             title: "Dep. 40", // Customize for another field
             dataIndex: "giac_d40",
             key: "giac_d40",
+            width: 60,
         },
         {
             title: "Dep. 48", // Customize for another field
             dataIndex: "giac_d48",
             key: "giac_d48",
+            width: 60,
         },
         {
             title: "Dep. 60", // Customize for another field
             dataIndex: "giac_d60",
             key: "giac_d60",
+            width: 60,
         },
         {
             title: "Dep. 81", // Customize for another field
             dataIndex: "giac_d81",
             key: "giac_d81",
+            width: 60,
         },
         {
             title: "Disp. m corr.",
