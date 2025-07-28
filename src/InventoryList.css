@@ -56,7 +56,7 @@
 
 /* Styling when value < 0 */
 .cell-red {
-    background-color: red;
+    background-color: #f31260;
     color: white;
     width: 100%;
     display: inline-flex;
@@ -66,7 +66,7 @@
 
 /* Styling when value < scorta */
 .cell-yellow {
-    background-color: yellow;
+    background-color: #f5a524;
     color: inherit;
     width: 100%;
     display: inline-flex;
