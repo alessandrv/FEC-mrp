@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Table, Spin, message, Input, Button, Tag, Tooltip, Typography, Card, Space, Modal, Checkbox } from 'antd';
-import { SearchOutlined, ReloadOutlined, RiseOutlined, FallOutlined, LoadingOutlined } from '@ant-design/icons';
+import { SearchOutlined, ReloadOutlined, RiseOutlined, FallOutlined, LoadingOutlined, DownloadOutlined } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from 'recharts';
 import axios from 'axios';
 import { API_BASE_URL } from './config';
+import ExcelJS from 'exceljs';
 
 const { Title, Text } = Typography;
 
@@ -112,6 +113,160 @@ const PriceList = () => {
             second_last_to_last: { min: '', max: '' }
         });
         setFilteredData(data);
+    };
+
+    const exportToExcel = async () => {
+        try {
+            const lastYear = new Date().getFullYear() - 1;
+            const costoLastYear = `Costo al 31/12/${lastYear}`;
+            
+            // Create workbook and worksheet
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('Report Variazioni Costi');
+
+            // Define headers in correct order
+            const headers = [
+                'Codice Articolo',
+                'Descrizione', 
+                'Valuta',
+                'Costo Storico',
+                costoLastYear,
+                'Penultimo Costo',
+                'Ultimo Costo',
+                'Variazione Storico → Ultimo (%)',
+                'Variazione Anno Scorso → Ultimo (%)',
+                'Variazione Penultimo → Ultimo (%)'
+            ];
+
+            // Add header row
+            const headerRow = worksheet.addRow(headers);
+            
+            // Style header row
+            headerRow.eachCell((cell, colNumber) => {
+                cell.fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FF366092' } // Dark blue
+                };
+                cell.font = {
+                    bold: true,
+                    color: { argb: 'FFFFFFFF' } // White
+                };
+                cell.alignment = {
+                    horizontal: 'center',
+                    vertical: 'middle'
+                };
+                cell.border = {
+                    top: { style: 'thin' },
+                    bottom: { style: 'thin' },
+                    left: { style: 'thin' },
+                    right: { style: 'thin' }
+                };
+            });
+
+            // Add data rows
+            filteredData.forEach((item, index) => {
+                const rowData = [
+                    item.article_code,
+                    item.description || '',
+                    item.valuta,
+                    item.first_price.price,
+                    item.last_year_last_price.price,
+                    item.second_last_price.price,
+                    item.last_price.price,
+                    item.changes.first_to_last / 100, // Convert percentage to decimal
+                    item.changes.last_year_to_last / 100, // Convert percentage to decimal
+                    item.changes.second_last_to_last / 100 // Convert percentage to decimal
+                ];
+                
+                const dataRow = worksheet.addRow(rowData);
+                
+                // Style data row with alternating colors
+                const isEvenRow = index % 2 === 0;
+                dataRow.eachCell((cell, colNumber) => {
+                    // Base styling
+                    cell.fill = {
+                        type: 'pattern',
+                        pattern: 'solid',
+                        fgColor: { argb: isEvenRow ? 'FFF2F2F2' : 'FFFFFFFF' } // Alternating colors
+                    };
+                    cell.border = {
+                        top: { style: 'thin' },
+                        bottom: { style: 'thin' },
+                        left: { style: 'thin' },
+                        right: { style: 'thin' }
+                    };
+                    cell.alignment = {
+                        horizontal: 'center',
+                        vertical: 'middle'
+                    };
+
+                    // Special formatting for percentage columns (columns 7, 8, 9 - 1-indexed)
+                    if (colNumber >= 8) {
+                        const percentageValue = rowData[colNumber - 1];
+                        if (percentageValue > 0) {
+                            // Positive percentage - red background
+                            cell.fill.fgColor = { argb: 'FFFFE6E6' }; // Light red
+                            cell.font = { 
+                                color: { argb: 'FFCC0000' }, // Dark red
+                                bold: true 
+                            };
+                        } else if (percentageValue < 0) {
+                            // Negative percentage - green background
+                            cell.fill.fgColor = { argb: 'FFE6FFE6' }; // Light green
+                            cell.font = { 
+                                color: { argb: 'FF006600' }, // Dark green
+                                bold: true 
+                            };
+                        }
+                        // Zero percentage keeps default styling
+                    }
+
+                    // Number formatting for cost columns (columns 4, 5, 6, 7 - 1-indexed)
+                    if (colNumber >= 4 && colNumber <= 7) {
+                        cell.numFmt = '#,##0.00';
+                    }
+
+                    // Percentage formatting for percentage columns
+                    if (colNumber >= 8) {
+                        cell.numFmt = '0.00%';
+                    }
+                });
+            });
+
+            // Set column widths
+            worksheet.columns = [
+                { key: 'A', width: 15 }, // Codice Articolo
+                { key: 'B', width: 40 }, // Descrizione
+                { key: 'C', width: 8 },  // Valuta
+                { key: 'D', width: 15 }, // Costo Storico
+                { key: 'E', width: 20 }, // Costo al 31/12/YYYY
+                { key: 'F', width: 15 }, // Penultimo Costo
+                { key: 'G', width: 15 }, // Ultimo Costo
+                { key: 'H', width: 25 }, // Variazione Storico → Ultimo (%)
+                { key: 'I', width: 30 }, // Variazione Anno Scorso → Ultimo (%)
+                { key: 'J', width: 30 }  // Variazione Penultimo → Ultimo (%)
+            ];
+
+            // Generate filename with current date
+            const currentDate = new Date().toISOString().split('T')[0];
+            const filename = `Report_Variazioni_Costi_${currentDate}.xlsx`;
+
+            // Save the file
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.click();
+            window.URL.revokeObjectURL(url);
+
+            message.success(`File Excel esportato: ${filename}`);
+        } catch (error) {
+            console.error('Error exporting to Excel:', error);
+            message.error('Errore durante l\'esportazione del file Excel');
+        }
     };
 
     // Price history modal functions
@@ -369,7 +524,13 @@ const PriceList = () => {
             render: (text) => <strong>{text}</strong>,
         },
         {
-            title: 'Primo Prezzo',
+            title: 'Descrizione',
+            dataIndex: 'description',
+            key: 'description',
+            width: 300,
+        },
+        {
+            title: 'Costo Storico',
             key: 'first_price',
             width: 200,
             render: (_, record) => (
@@ -382,7 +543,7 @@ const PriceList = () => {
             ),
         },
         {
-            title: 'Ultimo Prezzo Anno Scorso',
+            title: `Costo al 31/12/${new Date().getFullYear() - 1}`,
             key: 'last_year_last_price',
             width: 200,
             render: (_, record) => (
@@ -395,7 +556,7 @@ const PriceList = () => {
             ),
         },
         {
-            title: 'Penultimo Prezzo',
+            title: 'Penultimo Costo',
             key: 'second_last_price',
             width: 200,
             render: (_, record) => (
@@ -408,7 +569,7 @@ const PriceList = () => {
             ),
         },
         {
-            title: 'Ultimo Prezzo',
+            title: 'Ultimo Costo',
             key: 'last_price',
             width: 200,
             render: (_, record) => (
@@ -421,7 +582,7 @@ const PriceList = () => {
             ),
         },
         {
-            title: 'Variazione Primo → Ultimo',
+            title: 'Variazione Storico → Ultimo',
             key: 'first_to_last',
             width: 180,
             filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
@@ -576,10 +737,8 @@ const PriceList = () => {
         <div style={{ padding: '20px' }}>
             <Card>
                 <div style={{ marginBottom: '20px' }}>
-                    <Title level={2}>Lista Prezzi Articoli</Title>
-                    <Text type="secondary">
-                        Visualizzazione della storia prezzi per tutti gli articoli con calcolo delle variazioni percentuali
-                    </Text>
+                    <Title level={2}>Report Variazioni Costi</Title>
+                    
                 </div>
 
                 <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -590,8 +749,27 @@ const PriceList = () => {
                         style={{ width: '300px' }}
                         prefix={<SearchOutlined />}
                     />
-                   
-                  
+                    <Button 
+                        icon={<ReloadOutlined />} 
+                        onClick={fetchPriceList}
+                        loading={loading}
+                    >
+                        Aggiorna
+                    </Button>
+                    <Button 
+                        onClick={clearAllFilters}
+                        size="small"
+                    >
+                        Cancella Filtri
+                    </Button>
+                    <Button 
+                        type="primary"
+                        icon={<DownloadOutlined />}
+                        onClick={exportToExcel}
+                        disabled={filteredData.length === 0}
+                    >
+                        Export Excel
+                    </Button>
                     <Text type="secondary">
                         {filteredData.length} articoli trovati
                     </Text>

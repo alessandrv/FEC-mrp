@@ -2481,6 +2481,7 @@ async def get_price_list():
             query = """
             SELECT
                 c.ofc_arti,
+                trim(c.ofc_desc)||' '||trim(nvl(c.ofc_des2,' ')) as descrizione,
                 t.oft_data AS date,
                 c.ofc_preu AS price,
                 c.ofc_qord AS quantity,
@@ -2491,6 +2492,7 @@ async def get_price_list():
             WHERE
                 c.ofc_tipo != 'O'
                 AND c.ofc_preu > 0
+                AND c.ofc_arti is not null
             ORDER BY
                 c.ofc_arti, t.oft_data ASC
             """
@@ -2504,10 +2506,11 @@ async def get_price_list():
             
             for row in rows:
                 article_code = row[0]
-                date = row[1]
-                price = float(row[2]) if row[2] is not None else 0
-                quantity = int(row[3]) if row[3] is not None else 0
-                valuta = row[4] if row[4] is not None else 'EUR'
+                description = row[1] if row[1] is not None else ''
+                date = row[2]
+                price = float(row[3]) if row[3] is not None else 0
+                quantity = int(row[4]) if row[4] is not None else 0
+                valuta = row[5] if row[5] is not None else 'EUR'
                 
                 # Skip rows with invalid data
                 if article_code is None or date is None or price <= 0:
@@ -2516,7 +2519,8 @@ async def get_price_list():
                 if article_code not in articles_data:
                     articles_data[article_code] = {
                         'prices': [],
-                        'valuta': valuta
+                        'valuta': valuta,
+                        'description': description
                     }
                 
                 articles_data[article_code]['prices'].append({
@@ -2561,6 +2565,7 @@ async def get_price_list():
                 
                 result.append({
                     'article_code': article_code,
+                    'description': data['description'],
                     'valuta': data['valuta'],
                     'first_price': {
                         'date': first_price['date'],
