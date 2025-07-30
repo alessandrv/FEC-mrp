@@ -956,14 +956,14 @@ const customerOrdersColumns = [
                 };
                 
                 return (
-                    <div style={{ padding: 8 }}>
-                        <Input
+                <div style={{ padding: 8 }}>
+                    <Input
                             placeholder="Inserisci codice articolo..."
                             value={currentValue}
-                            onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
-                            onPressEnter={() => handleSearch(selectedKeys, confirm)}
-                            style={{ marginBottom: 8, display: "block" }}
-                        />
+                        onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+                        onPressEnter={() => handleSearch(selectedKeys, confirm)}
+                        style={{ marginBottom: 8, display: "block" }}
+                    />
                         
                         {/* Helper buttons */}
                         <div style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "4px" }}>
@@ -995,25 +995,25 @@ const customerOrdersColumns = [
                             >
                                 Esatto
                             </Button>
-                        </div>
+                    </div>
                         
                         <div style={{ marginBottom: 8, fontSize: '11px', color: '#666' }}>
                             <strong>Esempi avanzati:</strong> 0P*, *0P, *0P*, 0P*AC, 0AC*MF
                         </div>
                         
-                        <Button
-                            type="primary"
-                            onClick={() => handleSearch(selectedKeys, confirm)}
-                            icon={<SearchOutlined />}
-                            size="small"
-                            style={{ width: 150, marginRight: 8 }}
-                        >
-                            Cerca
-                        </Button>
+                    <Button
+                        type="primary"
+                        onClick={() => handleSearch(selectedKeys, confirm)}
+                        icon={<SearchOutlined />}
+                        size="small"
+                        style={{ width: 150, marginRight: 8 }}
+                    >
+                        Cerca
+                    </Button>
                         <Button onClick={() => handleReset(clearFilters, confirm)} size="small" style={{ width: 90 }}>
-                            Reset
-                        </Button>
-                    </div>
+                        Reset
+                    </Button>
+                </div>
                 );
             },
             filterIcon: (filtered) => (
@@ -2935,6 +2935,10 @@ const customerOrdersColumns = [
         navigate('/availability');
     };
 
+    const goToPriceList = () => {
+        navigate('/pricelist');
+    };
+
     // Now the menu2 definition can reference handleKioskClick properly
     const menu2 = (
         <Menu>
@@ -2963,6 +2967,9 @@ const customerOrdersColumns = [
             <Menu.Divider />
             <Menu.Item key="disponibilita" onClick={reportDisponibilita}>
                 Report Online Disponibilità
+            </Menu.Item>
+            <Menu.Item key="pricelist" onClick={goToPriceList}>
+                Lista Prezzi Articoli
             </Menu.Item>
 
         </Menu>
@@ -3020,7 +3027,7 @@ const customerOrdersColumns = [
 
 
     // Custom Legend Component
-        const CustomLegend = () => {
+    const CustomLegend = () => {
         return (
             <div style={{ 
                 display: "flex", 
@@ -3038,7 +3045,7 @@ const customerOrdersColumns = [
                         <div style={{ fontSize: "12px" }}>
                             <strong>Prezzo Max:</strong><br/>
                             {maxPriceData.price.toFixed(2)} - {new Date(maxPriceData.date).toLocaleDateString()}
-                        </div>
+                </div>
                     )}
                     {minPriceData && minPriceData.price && (
                         <div style={{ fontSize: "12px" }}>
@@ -3062,12 +3069,12 @@ const customerOrdersColumns = [
                 </div>
 
                 <div style={{ textAlign: "center" }}>
-                    <Checkbox
-                        checked={isAverage}
-                        onChange={handleCheckboxChange}
-                    >
-                        Media per mese
-                    </Checkbox>
+                <Checkbox
+                    checked={isAverage}
+                    onChange={handleCheckboxChange}
+                >
+                    Media per mese
+                </Checkbox>
                 </div>
             </div>
         );
@@ -3605,43 +3612,43 @@ const customerOrdersColumns = [
                                 {/* Charts Section */}
                                 <div style={{ display: "flex", flexDirection: "column", gap: "20px", flex: 1 }}>
                                     {/* Base Price Chart */}
-                                    <div>
+                        <div>
                                         <h3 style={{ textAlign: "center", marginBottom: "10px" }}>Prezzo Base</h3>
-                                        <LineChart
-                                            width={800}
+                                <LineChart
+                                    width={800}
                                             height={300}
                                             data={isAverage ? averageChartData.filter(item => item.price !== null) : chartData.filter(item => item.price !== null)}
-                                            margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
-                                        >
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis
-                                                dataKey="date"
-                                                angle={-45}
-                                                textAnchor="end"
-                                                tickFormatter={(dateValue) => {
-                                                    if (isAverage) {
+                                    margin={{ top: 20, right: 30, left: 20, bottom: 50 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis
+                                        dataKey="date"
+                                        angle={-45}
+                                        textAnchor="end"
+                                        tickFormatter={(dateValue) => {
+                                            if (isAverage) {
                                                         const date = new Date(dateValue + '-01');
-                                                        return date.toLocaleString('default', { month: 'short', year: 'numeric' });
-                                                    } else {
-                                                        const date = new Date(dateValue);
+                                                return date.toLocaleString('default', { month: 'short', year: 'numeric' });
+                                            } else {
+                                                const date = new Date(dateValue);
                                                         return date.toLocaleDateString();
-                                                    }
-                                                }}
-                                            />
-                                            <YAxis />
-                                            <Tooltip
-                                                labelFormatter={(dateStr) => {
-                                                    const date = new Date(dateStr);
-                                                    return date.toLocaleDateString();
-                                                }}
-                                            />
-                                            <Line
-                                                type="monotone"
-                                                dataKey="price"
-                                                name={`Prezzo (${valuta})`}
-                                                stroke="#8884d8"
-                                                activeDot={{ r: 8 }}
-                                            />
+                                            }
+                                        }}
+                                    />
+                                    <YAxis />
+                                    <Tooltip
+                                        labelFormatter={(dateStr) => {
+                                            const date = new Date(dateStr);
+                                            return date.toLocaleDateString();
+                                        }}
+                                    />
+                                    <Line
+                                        type="monotone"
+                                        dataKey="price"
+                                        name={`Prezzo (${valuta})`}
+                                        stroke="#8884d8"
+                                        activeDot={{ r: 8 }}
+                                    />
                                             
                                         </LineChart>
                                     </div>
@@ -3684,10 +3691,10 @@ const customerOrdersColumns = [
                                                 name="Prezzo FIFO"
                                                 stroke="#ff7300"
                                                 activeDot={{ r: 1}}
-                                            />
-                                        )}
-                                        </LineChart>
-                                    </div>
+                                        />
+                                    )}
+                                </LineChart>
+                            </div>
                                 </div>
 
                                 {/* Legend Section - Right Side */}

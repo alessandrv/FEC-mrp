@@ -1911,7 +1911,7 @@ nvl((select sum(mpf_qfab) from mpfabbi, mpordil where mpf_arti = amg_code
 nvl((select sum(mpf_qfab) from mpfabbi, mpordil, mpordgol, ocordit where mpf_arti = amg_code 
   and mpf_ordl = mol_code and mol_code = gol_mpco and gol_octi = oct_tipo and gol_occo = oct_code
   and oct_data between last_day(add_months(today,-1))+1 and last_day(today)),0) ord_mc,
-nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code
+nvl((select sum(occ_qmov-occ_qcon) from ocordic, ocordit where occ_arti = amg_code and oct_stat != 'O' and occ_tipo = oct_tipo and occ_code = oct_code -- and occ_tipo in ('O','P','Q') 
 and occ_feva = 'N'
   and occ_dtco <= last_day(today)),0) +
 nvl((select sum(mpf_qfab-mpf_qpre) from mpfabbi where mpf_arti = amg_code and mpf_feva = 'N'
@@ -2467,3 +2467,140 @@ async def get_expanded_group_articles(name: str):
                 cursor.close()
             except Exception as e:
                 print(f"Error closing cursor: {str(e)}")
+
+@app.get("/price_list")
+async def get_price_list():
+    """
+    Get price list data for all articles with price history and percentage changes
+    """
+    try:
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+            
+            # Get all price data for all articles
+            query = """
+            SELECT
+                c.ofc_arti,
+                t.oft_data AS date,
+                c.ofc_preu AS price,
+                c.ofc_qord AS quantity,
+                t.oft_valu AS valuta
+            FROM
+                ofordic c
+                INNER JOIN ofordit t ON c.ofc_code = t.oft_code
+            WHERE
+                c.ofc_tipo != 'O'
+                AND c.ofc_preu > 0
+            ORDER BY
+                c.ofc_arti, t.oft_data ASC
+            """
+            
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            # Process the data to get price history for each article
+            articles_data = {}
+            current_year = datetime.now().year
+            
+            for row in rows:
+                article_code = row[0]
+                date = row[1]
+                price = float(row[2]) if row[2] is not None else 0
+                quantity = int(row[3]) if row[3] is not None else 0
+                valuta = row[4] if row[4] is not None else 'EUR'
+                
+                # Skip rows with invalid data
+                if article_code is None or date is None or price <= 0:
+                    continue
+                
+                if article_code not in articles_data:
+                    articles_data[article_code] = {
+                        'prices': [],
+                        'valuta': valuta
+                    }
+                
+                articles_data[article_code]['prices'].append({
+                    'date': date.strftime('%Y-%m-%d'),
+                    'price': price,
+                    'quantity': quantity
+                })
+            
+            # Calculate price history for each article
+            result = []
+            for article_code, data in articles_data.items():
+                prices = data['prices']
+                if len(prices) == 0:
+                    continue
+                
+                # Sort prices by date
+                prices.sort(key=lambda x: x['date'])
+                
+                # Get first price
+                first_price = prices[0]
+                
+                # Get last price (most recent)
+                last_price = prices[-1]
+                
+                # Get last year's last price
+                last_year_prices = [p for p in prices if p['date'].startswith(str(current_year - 1))]
+                last_year_last_price = last_year_prices[-1] if last_year_prices else last_price
+                
+                # Get second last price (if exists)
+                second_last_price = prices[-2] if len(prices) > 1 else last_price
+                
+                # Calculate percentage changes
+                def calculate_percentage_change(old_price, new_price):
+                    if old_price == 0:
+                        return 0
+                    return round(((new_price - old_price) / old_price) * 100, 2)
+                
+                # Calculate changes compared to last price
+                first_to_last_change = calculate_percentage_change(first_price['price'], last_price['price'])
+                last_year_to_last_change = calculate_percentage_change(last_year_last_price['price'], last_price['price'])
+                second_last_to_last_change = calculate_percentage_change(second_last_price['price'], last_price['price'])
+                
+                result.append({
+                    'article_code': article_code,
+                    'valuta': data['valuta'],
+                    'first_price': {
+                        'date': first_price['date'],
+                        'price': first_price['price'],
+                        'quantity': first_price['quantity']
+                    },
+                    'last_year_last_price': {
+                        'date': last_year_last_price['date'],
+                        'price': last_year_last_price['price'],
+                        'quantity': last_year_last_price['quantity']
+                    },
+                    'second_last_price': {
+                        'date': second_last_price['date'],
+                        'price': second_last_price['price'],
+                        'quantity': second_last_price['quantity']
+                    },
+                    'last_price': {
+                        'date': last_price['date'],
+                        'price': last_price['price'],
+                        'quantity': last_price['quantity']
+                    },
+                    'changes': {
+                        'first_to_last': first_to_last_change,
+                        'last_year_to_last': last_year_to_last_change,
+                        'second_last_to_last': second_last_to_last_change
+                    }
+                })
+            
+            # Sort by article code
+            result.sort(key=lambda x: x['article_code'])
+            
+            return {
+                'success': True,
+                'data': result,
+                'total_count': len(result)
+            }
+            
+    except Exception as e:
+        print(f"Error in get_price_list: {str(e)}")
+        return JSONResponse(
+            status_code=500,
+            content={'success': False, 'error': f'Database error: {str(e)}'}
+        )
