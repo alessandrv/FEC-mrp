@@ -3,6 +3,7 @@ import { Table, Spin, message, Input, Button, Tag, Tooltip, Typography, Card, Sp
 import { SearchOutlined, ReloadOutlined, RiseOutlined, FallOutlined, LoadingOutlined } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend } from 'recharts';
 import axios from 'axios';
+import { API_BASE_URL } from './config';
 
 const { Title, Text } = Typography;
 
@@ -35,7 +36,7 @@ const PriceList = () => {
     const fetchPriceList = async () => {
         setLoading(true);
         try {
-            const response = await axios.get('http://localhost:8000/price_list');
+            const response = await axios.get(`${API_BASE_URL}/price_list`);
             if (response.data.success) {
                 setData(response.data.data);
                 setFilteredData(response.data.data);
@@ -139,7 +140,7 @@ const PriceList = () => {
     const fetchArticleData = async (articleCode) => {
         try {
             // Fetch processed data from the backend
-            const priceResponse = await axios.get(`http://localhost:8000/article_price`, {
+            const priceResponse = await axios.get(`${API_BASE_URL}/article_price`, {
                 params: { article_code: articleCode },
             });
 
