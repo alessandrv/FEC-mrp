@@ -34,6 +34,32 @@ const PriceList = () => {
     const [valuta, setValuta] = useState(null);
     const [isAverage, setIsAverage] = useState(false);
 
+    // Regex search functions
+    const wildcardToRegex = (pattern) => {
+        // Escape special regex characters except *
+        const escapedPattern = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
+        // Convert * to .* for regex
+        const regexPattern = escapedPattern.replace(/\*/g, '.*');
+        // Create case-insensitive regex
+        return new RegExp(`^${regexPattern}$`, 'i');
+    };
+
+    const matchesWildcardPattern = (text, pattern) => {
+        if (!pattern) return true;
+        // Trim the text to remove any leading/trailing whitespace
+        const trimmedText = text.trim();
+        // Convert the pattern to a regex
+        const regex = wildcardToRegex(pattern);
+        // Test if the text matches the pattern
+        return regex.test(trimmedText);
+    };
+
+    const debugPatternMatch = (text, pattern) => {
+        const trimmedText = text.trim();
+        const regex = wildcardToRegex(pattern);
+        return regex.test(trimmedText);
+    };
+
     const fetchPriceList = async () => {
         setLoading(true);
         try {
@@ -67,6 +93,34 @@ const PriceList = () => {
         applyFilters(value, percentageFilters);
     };
 
+    const handlePatternButton = (type) => {
+        let cleanValue = searchText;
+        
+        // Remove existing wildcards at start/end (but keep internal ones)
+        cleanValue = cleanValue.replace(/^\*+/, '').replace(/\*+$/, '');
+        
+        let formattedValue;
+        switch (type) {
+            case 'starts':
+                formattedValue = cleanValue + '*';
+                break;
+            case 'ends':
+                formattedValue = '*' + cleanValue;
+                break;
+            case 'contains':
+                formattedValue = '*' + cleanValue + '*';
+                break;
+            case 'exact':
+                formattedValue = cleanValue;
+                break;
+            default:
+                formattedValue = cleanValue;
+        }
+        
+        setSearchText(formattedValue);
+        applyFilters(formattedValue, percentageFilters);
+    };
+
     const handlePercentageFilterChange = (filterType, field, value) => {
         const newFilters = {
             ...percentageFilters,
@@ -82,10 +136,10 @@ const PriceList = () => {
     const applyFilters = (searchValue, percentageFilterValues) => {
         let filtered = data;
 
-        // Apply search filter
+        // Apply search filter with regex pattern matching
         if (searchValue) {
             filtered = filtered.filter(item => 
-                item.article_code.toLowerCase().includes(searchValue.toLowerCase())
+                debugPatternMatch(item.article_code, searchValue)
             );
         }
 
@@ -742,13 +796,49 @@ const PriceList = () => {
                 </div>
 
                 <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Input
-                        placeholder="Cerca per codice articolo..."
-                        value={searchText}
-                        onChange={(e) => handleSearch(e.target.value)}
-                        style={{ width: '300px' }}
-                        prefix={<SearchOutlined />}
-                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <Input
+                            placeholder="Cerca per codice articolo..."
+                            value={searchText}
+                            onChange={(e) => handleSearch(e.target.value)}
+                            style={{ width: '300px' }}
+                            prefix={<SearchOutlined />}
+                        />
+                        {/* Helper buttons for pattern matching */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('starts')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Inizia con
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('ends')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Finisce con
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('contains')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Contiene
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('exact')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Esatto
+                            </Button>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#666' }}>
+                            <strong>Esempi avanzati:</strong> 0P*, *0P, *0P*, 0P*AC, 0AC*MF
+                        </div>
+                    </div>
                     <Button 
                         icon={<ReloadOutlined />} 
                         onClick={fetchPriceList}
