@@ -34,6 +34,9 @@ const PriceList = () => {
     const [valuta, setValuta] = useState(null);
     const [isAverage, setIsAverage] = useState(false);
 
+    // Table ref for clearing filters
+    const tableRef = React.useRef();
+
     // Regex search functions
     const wildcardToRegex = (pattern) => {
         // Escape special regex characters except *
@@ -167,6 +170,10 @@ const PriceList = () => {
             second_last_to_last: { min: '', max: '' }
         });
         setFilteredData(data);
+        // Clear table column filters
+        if (tableRef.current) {
+            tableRef.current.clearFilters();
+        }
     };
 
     const exportToExcel = async () => {
@@ -576,6 +583,117 @@ const PriceList = () => {
             width: 150,
             fixed: 'left',
             render: (text) => <strong>{text}</strong>,
+            filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => {
+                const currentValue = selectedKeys[0] || '';
+                
+                const formatPattern = (type) => {
+                    let cleanValue = currentValue;
+                    
+                    // Remove existing wildcards at start/end (but keep internal ones)
+                    cleanValue = cleanValue.replace(/^\*+/, '').replace(/\*+$/, '');
+                    
+                    switch (type) {
+                        case 'starts':
+                            return cleanValue + '*';
+                        case 'ends':
+                            return '*' + cleanValue;
+                        case 'contains':
+                            return '*' + cleanValue + '*';
+                        case 'exact':
+                            return cleanValue;
+                        default:
+                            return cleanValue;
+                    }
+                };
+                
+                const handlePatternButton = (type) => {
+                    const formattedValue = formatPattern(type);
+                    setSelectedKeys(formattedValue ? [formattedValue] : []);
+                };
+                
+                const handleSearch = (selectedKeys, confirm) => {
+                    confirm();
+                    setSearchText(selectedKeys[0]);
+                };
+
+                const handleReset = (clearFilters, confirm) => {
+                    clearFilters();
+                    setSearchText("");
+                    confirm();
+                };
+                
+                return (
+                    <div style={{ padding: 8 }}>
+                        <Input
+                            placeholder="Inserisci codice articolo..."
+                            value={currentValue}
+                            onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+                            onPressEnter={() => handleSearch(selectedKeys, confirm)}
+                            style={{ marginBottom: 8, display: "block" }}
+                        />
+                        
+                        {/* Helper buttons */}
+                        <div style={{ marginBottom: 8, display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('starts')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Inizia con
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('ends')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Finisce con
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('contains')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Contiene
+                            </Button>
+                            <Button 
+                                size="small" 
+                                onClick={() => handlePatternButton('exact')}
+                                style={{ fontSize: '10px', padding: '2px 6px' }}
+                            >
+                                Esatto
+                            </Button>
+                        </div>
+                        
+                        <div style={{ marginBottom: 8, fontSize: '11px', color: '#666' }}>
+                            <strong>Esempi avanzati:</strong> 0P*, *0P, *0P*, 0P*AC, 0AC*MF
+                        </div>
+                        
+                        <Button
+                            type="primary"
+                            onClick={() => handleSearch(selectedKeys, confirm)}
+                            icon={<SearchOutlined />}
+                            size="small"
+                            style={{ width: 150, marginRight: 8 }}
+                        >
+                            Cerca
+                        </Button>
+                        <Button onClick={() => handleReset(clearFilters, confirm)} size="small" style={{ width: 90 }}>
+                            Reset
+                        </Button>
+                    </div>
+                );
+            },
+            filterIcon: (filtered) => (
+                <SearchOutlined
+                    style={{
+                        color: filtered ? '#1677ff' : undefined,
+                    }}
+                />
+            ),
+            onFilter: (value, record) => {
+                const result = debugPatternMatch(record.article_code, value);
+                return result;
+            },
         },
         {
             title: 'Descrizione',
@@ -797,48 +915,8 @@ const PriceList = () => {
 
                 <div style={{ marginBottom: '16px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <Input
-                            placeholder="Cerca per codice articolo..."
-                            value={searchText}
-                            onChange={(e) => handleSearch(e.target.value)}
-                            style={{ width: '300px' }}
-                            prefix={<SearchOutlined />}
-                        />
-                        {/* Helper buttons for pattern matching */}
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-                            <Button 
-                                size="small" 
-                                onClick={() => handlePatternButton('starts')}
-                                style={{ fontSize: '10px', padding: '2px 6px' }}
-                            >
-                                Inizia con
-                            </Button>
-                            <Button 
-                                size="small" 
-                                onClick={() => handlePatternButton('ends')}
-                                style={{ fontSize: '10px', padding: '2px 6px' }}
-                            >
-                                Finisce con
-                            </Button>
-                            <Button 
-                                size="small" 
-                                onClick={() => handlePatternButton('contains')}
-                                style={{ fontSize: '10px', padding: '2px 6px' }}
-                            >
-                                Contiene
-                            </Button>
-                            <Button 
-                                size="small" 
-                                onClick={() => handlePatternButton('exact')}
-                                style={{ fontSize: '10px', padding: '2px 6px' }}
-                            >
-                                Esatto
-                            </Button>
+                        
                         </div>
-                        <div style={{ fontSize: '11px', color: '#666' }}>
-                            <strong>Esempi avanzati:</strong> 0P*, *0P, *0P*, 0P*AC, 0AC*MF
-                        </div>
-                    </div>
                     <Button 
                         icon={<ReloadOutlined />} 
                         onClick={fetchPriceList}
@@ -866,6 +944,7 @@ const PriceList = () => {
                 </div>
 
                 <Table
+                    ref={tableRef}
                     columns={columns}
                     dataSource={filteredData}
                     rowKey="article_code"
