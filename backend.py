@@ -299,17 +299,22 @@ def get_optimized_query():
     return """
 select amg_code c_articolo, amg_dest d_articolo, amg_tipo a_p, amp_lead lt,
 nvl((select round(dep_scom) from mgdepo where dep_arti = amg_code and dep_code = 1),0) scrt,
-(select max(cf.des_clifor) from ofordic ofc
+(select min(cf.des_clifor) from ofordic ofc
  join ofordit oft on ofc.ofc_tipo = oft.oft_tipo and ofc.ofc_code = oft.oft_code
  join agclifor cf on oft.oft_cofo = cf.cod_clifor
- where ofc.ofc_arti = amg_code) fornitore,
+ where ofc.ofc_arti = amg_code  
+ and ofc.ofc_dtco = (select max(ofc2.ofc_dtco) from ofordic ofc2 where ofc2.ofc_arti = amg_code)) fornitore,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 1) giac_d01,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 20) giac_d20,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 32) giac_d32,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 40) giac_d40,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 48) giac_d48,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 60) giac_d60,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 80) giac_d80,
 (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 81) giac_d81,
+nvl((select sum(mpl.mpl_coimp * 
+    (select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = mpl.mpl_padre and dep_code = 81)
+  ) from mplegami mpl where mpl.mpl_figlio = amg_code),0) giac_d81_legami,
 (select round(dep_qgiai+dep_qcar-dep_qsca+dep_qord+dep_qorp-dep_qpre-dep_qprp,0) from mgdepo 
   where dep_arti = amg_code and dep_code = 1) 
 - (select sum(mpf_qfab) from mpfabbi, mpordil where mpf_ordl = mol_code and mpf_feva = 'N' and mol_stato = 'P'
@@ -905,6 +910,125 @@ def create_products_availability_table():
             
     except Exception as e:
         print(f"Error creating products_availability table: {e}")
+
+@app.get("/legami_details")
+async def get_legami_details(article_code: str):
+    """
+    Get legami details for a specific article showing which parent articles contribute to the legami value.
+    """
+    try:
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+
+            query = """
+            select 
+                mpl.mpl_padre,
+                mpl.mpl_coimp,
+                nvl((select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = mpl.mpl_padre and dep_code = 81),0) as parent_d81,
+                mpl.mpl_coimp * nvl((select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = mpl.mpl_padre and dep_code = 81),0) as contribution,
+                (select amg_dest from mganag where amg_code = mpl.mpl_padre) as parent_description
+            from mplegami mpl 
+            where mpl.mpl_figlio = ?
+            order by mpl.mpl_padre
+            """
+
+            cursor.execute(query, (article_code,))
+            rows = cursor.fetchall()
+
+            print(f"Legami details query for article {article_code}: found {len(rows)} rows")
+
+            if not rows:
+                print(f"No legami data found for article {article_code}")
+                return JSONResponse(content={"details": [], "total": 0})
+
+            # Convert the results to a list of dictionaries
+            details = []
+            total_contribution = 0
+            
+            for row in rows:
+                parent_code = row[0]
+                coefficient = float(row[1]) if row[1] is not None else 0.0
+                parent_d81 = int(row[2]) if row[2] is not None else 0
+                contribution = float(row[3]) if row[3] is not None else 0.0
+                parent_desc = row[4] if row[4] is not None else ""
+                
+                details.append({
+                    "parent_code": parent_code,
+                    "parent_description": parent_desc,
+                    "coefficient": coefficient,
+                    "parent_d81": parent_d81,
+                    "contribution": contribution
+                })
+                
+                total_contribution += contribution
+
+            result = {
+                "details": details,
+                "total": total_contribution
+            }
+
+            return JSONResponse(content=result)
+        
+    except Exception as e:
+        print(f"Error getting legami details: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error getting legami details: {str(e)}")
+
+@app.get("/test_legami")
+async def test_legami_table():
+    """
+    Test endpoint to check if mplegami table exists and has data.
+    """
+    try:
+        with get_connection_from_pool() as conn:
+            cursor = conn.cursor()
+
+            # First test if table exists and count rows
+            test_query = "SELECT count(*) FROM mplegami"
+            cursor.execute(test_query)
+            count_result = cursor.fetchone()
+            total_rows = count_result[0] if count_result else 0
+
+            # Get first few rows as sample
+            sample_query = "SELECT first 5 mpl_padre, mpl_figlio, mpl_coimp FROM mplegami"
+            cursor.execute(sample_query)
+            sample_rows = cursor.fetchall()
+
+            # Test specifically for 0AC005MF
+            test_specific_query = "SELECT mpl_padre, mpl_figlio, mpl_coimp FROM mplegami WHERE mpl_figlio = ?"
+            cursor.execute(test_specific_query, ("0AC005MF",))
+            specific_rows = cursor.fetchall()
+
+            result = {
+                "table_exists": True,
+                "total_rows": total_rows,
+                "sample_data": [
+                    {
+                        "padre": row[0],
+                        "figlio": row[1], 
+                        "coimp": float(row[2]) if row[2] is not None else 0.0
+                    } for row in sample_rows
+                ],
+                "test_0AC005MF": [
+                    {
+                        "padre": row[0],
+                        "figlio": row[1], 
+                        "coimp": float(row[2]) if row[2] is not None else 0.0
+                    } for row in specific_rows
+                ]
+            }
+
+            return JSONResponse(content=result)
+        
+    except Exception as e:
+        error_msg = str(e)
+        print(f"Error testing legami table: {error_msg}")
+        return JSONResponse(content={
+            "table_exists": False,
+            "error": error_msg,
+            "total_rows": 0,
+            "sample_data": [],
+            "test_0AC005MF": []
+        })
 
 @app.get("/today_orders")
 async def get_today_orders():

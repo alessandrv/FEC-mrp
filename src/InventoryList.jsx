@@ -108,7 +108,6 @@ const ArticlesTable = () => {
     const [showNegativeOnly, setShowNegativeOnly] = useState(false);
     const [showUnderScortaOnly, setShowUnderScortaOnly] = useState(false);
     const [searchText, setSearchText] = useState("");
-    const [apFilter, setApFilter] = useState("A");
 
     // Add these new state variables at the beginning of the component
     const [isSimulationModalVisible, setIsSimulationModalVisible] = useState(false);
@@ -144,6 +143,13 @@ const ArticlesTable = () => {
 
     // Add state variable for unique suppliers
     const [uniqueSuppliers, setUniqueSuppliers] = useState([]);
+    
+    // Add state for legami tooltip - using Map to store data per article
+    const [legamiTooltipData, setLegamiTooltipData] = useState(new Map());
+    const [legamiTooltipLoading, setLegamiTooltipLoading] = useState(new Set());
+    
+    // Add state for table column filters
+    const [tableFilters, setTableFilters] = useState({});
 
     // Add this utility function to convert wildcard pattern to regex
     const wildcardToRegex = (pattern) => {
@@ -222,6 +228,8 @@ const ArticlesTable = () => {
             giac_d40: parseInt(item.giac_d40) || 0,
             giac_d48: parseInt(item.giac_d48) || 0,
             giac_d60: parseInt(item.giac_d60) || 0,
+            giac_d80: parseInt(item.giac_d80) || 0,
+            giac_d81_legami: parseInt(item.giac_d81_legami) || 0,
             giac_d81: parseInt(item.giac_d81) || 0,
             ord_mpp: parseInt(item.ord_mpp) || 0,
             ord_mp: parseInt(item.ord_mp) || 0,
@@ -413,6 +421,96 @@ const ArticlesTable = () => {
             setSupplierOrdersLoading(false);
         }
     };
+    
+    const fetchLegamiDetails = async (articleCode) => {
+        try {
+            console.log(`Fetching legami details for article: ${articleCode}`);
+            // Add article to loading set
+            setLegamiTooltipLoading(prev => new Set(prev).add(articleCode));
+            
+            const response = await axios.get(`${API_BASE_URL}/legami_details`, {
+                params: { article_code: articleCode },
+            });
+
+            console.log(`Legami details response for ${articleCode}:`, response.data);
+
+            // Update the data map for this article
+            setLegamiTooltipData(prev => {
+                const newMap = new Map(prev);
+                newMap.set(articleCode, response.data);
+                return newMap;
+            });
+        } catch (error) {
+            console.error("Error fetching legami details:", error);
+            // Set empty data for this article
+            setLegamiTooltipData(prev => {
+                const newMap = new Map(prev);
+                newMap.set(articleCode, { details: [], total: 0 });
+                return newMap;
+            });
+        } finally {
+            // Remove article from loading set
+            setLegamiTooltipLoading(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(articleCode);
+                return newSet;
+            });
+        }
+    };
+    
+    const handleFilterByArticle = (articleCode) => {
+        // Trim whitespaces from the article code
+        const trimmedArticleCode = articleCode.trim();
+        
+        // Clear existing group filters
+        setIsFilteringByGroup(false);
+        setGroupArticleCodes([]);
+        setSelectedGroup(null);
+        
+        // Clear other filters
+        setShowNegativeOnly(false);
+        setShowUnderScortaOnly(false);
+        
+        // Set the table filters to filter by this specific article
+        setTableFilters({
+            c_articolo: [trimmedArticleCode],
+            a_p: ["A", "P"], // Show both A and P when filtering by specific article
+        });
+        
+        // Clear search text since we're using column filters now
+        setSearchText("");
+        
+        // Show success message
+        message.success(`Filtrato per articolo: ${trimmedArticleCode}`);
+        
+        // Scroll to top of table to show the filtered result
+        setTimeout(() => {
+            const tableContainer = document.querySelector('.table-container');
+            if (tableContainer) {
+                tableContainer.scrollTop = 0;
+            }
+        }, 100);
+    };
+    
+    const handleTableChange = (pagination, filters, sorter, extra) => {
+        // Update the table filters state when filters change
+        setTableFilters(filters);
+    };
+    
+    const clearAllFilters = () => {
+        // Clear all filters and reset to default state
+        setTableFilters({
+            a_p: ["A"] // Reset AP filter to default "A" only
+        });
+        setSearchText("");
+        setIsFilteringByGroup(false);
+        setGroupArticleCodes([]);
+        setSelectedGroup(null);
+        setShowNegativeOnly(false);
+        setShowUnderScortaOnly(false);
+        message.success("Tutti i filtri sono stati rimossi");
+    };
+    
     const fetchCustomerOrdersData = async (articleCode) => {
         try {
             // Fetch data from the backend
@@ -1027,6 +1125,7 @@ const customerOrdersColumns = [
                 const result = debugPatternMatch(record.c_articolo, value);
                 return result;
             },
+            filteredValue: tableFilters.c_articolo || null,
         },
         {
             title: "AP", // Customized title for 'a_p'
@@ -1064,7 +1163,7 @@ const customerOrdersColumns = [
                 }
                 return record.a_p === value;
             },
-            defaultFilteredValue: ["A"],
+            filteredValue: tableFilters.a_p !== null ? tableFilters.a_p : ["A"],
         },
       
         {
@@ -1211,10 +1310,105 @@ const customerOrdersColumns = [
             width: 60,
         },
         {
+            title: "Dep. 80", // Customize for another field
+            dataIndex: "giac_d80",
+            key: "giac_d80",
+            width: 60,
+        },
+        {
             title: "Dep. 81", // Customize for another field
             dataIndex: "giac_d81",
             key: "giac_d81",
             width: 60,
+        },
+        {
+            title: "Dep. 81 distinta", // Customize for another field
+            dataIndex: "giac_d81_legami",
+            key: "giac_d81_legami",
+            width: 60,
+            render: (text, record) => {
+                if (text === 0) {
+                    return text;
+                }
+                
+                const articleCode = record.c_articolo;
+                const isLoading = legamiTooltipLoading.has(articleCode);
+                const articleData = legamiTooltipData.get(articleCode);
+                
+                const renderTooltipContent = () => {
+                    if (isLoading) {
+                        return <Spin size="small" />;
+                    }
+                    
+                    if (!articleData || articleData.details.length === 0) {
+                        return (
+                            <div>
+                                <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>
+                                    Nessun dettaglio legami disponibile
+                                </div>
+                                <div style={{ fontSize: '11px', color: '#666' }}>
+                                    L'articolo {articleCode} non ha articoli padre<br/>
+                                    configurati nella tabella mplegami
+                                </div>
+                            </div>
+                        );
+                    }
+                    
+                    return (
+                        <div style={{ maxWidth: '300px' }}>
+                            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
+                                Articoli correlati:
+                            </div>
+                            {articleData.details.map((detail, index) => (
+                                <div key={index} style={{ marginBottom: '4px', fontSize: '12px' }}>
+                                    <div 
+                                        style={{ 
+                                            fontWeight: 'bold', 
+                                            cursor: 'pointer', 
+                                            color: '#1890ff',
+                                            textDecoration: 'underline'
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleFilterByArticle(detail.parent_code);
+                                        }}
+                                        title="Clicca per filtrare questo articolo"
+                                    >
+                                        {detail.parent_code}
+                                    </div>
+                                    <div style={{ color: '#666' }}>{detail.parent_description}</div>
+                                    <div>
+                                        Q.ta: {detail.coefficient} × Dep81: {detail.parent_d81} = <strong>{detail.contribution}</strong>
+                                    </div>
+                                </div>
+                            ))}
+                            <div style={{ borderTop: '1px solid #ddd', paddingTop: '4px', marginTop: '8px', fontWeight: 'bold' }}>
+                                Totale: {articleData.total}
+                            </div>
+                            <div style={{ borderTop: '1px solid #ddd', paddingTop: '4px', marginTop: '8px', fontSize: '10px', color: '#666' }}>
+                                Clicca sui codici articolo per filtrarli nella tabella
+                            </div>
+                        </div>
+                    );
+                };
+                
+                return (
+                    <AntTooltip 
+                        title={renderTooltipContent()}
+                        trigger="hover"
+                        placement="right"
+                        onVisibleChange={(visible) => {
+                            if (visible && !articleData && !isLoading) {
+                                fetchLegamiDetails(articleCode);
+                            }
+                        }}
+                    >
+                        <span style={{ cursor: 'pointer', textDecoration: 'underline' }}>
+                            {text}
+                        </span>
+                    </AntTooltip>
+                );
+            },
         },
         {
             title: "Disp. m corr.",
@@ -2225,7 +2419,7 @@ const customerOrdersColumns = [
         "ord_mpp", "ord_mp", "ord_mc",
         "dom_mc", "dom_ms", "dom_msa", "dom_mss",
         "off_mc", "off_ms", "off_msa", "off_mss",
-        "giac_d01", "giac_d20", "giac_d32", "giac_d40", "giac_d48", "giac_d60", "giac_d81"
+        "giac_d01", "giac_d20", "giac_d32", "giac_d40", "giac_d48", "giac_d60", "giac_d80", "giac_d81", "giac_d81_legami"
     ];
 
     const filteredData = data
@@ -2254,10 +2448,7 @@ const customerOrdersColumns = [
             return true;
         })
         .filter(item => {
-            // Filter by A/P
-            if (apFilter !== 'Tutti') {
-                return item.a_p === apFilter;
-            }
+            // Filter by A/P - this is now handled by the column filter itself
             return true;
         })
         .filter(item => {
@@ -2270,7 +2461,9 @@ const customerOrdersColumns = [
                     item.giac_d40 < 0 ||
                     item.giac_d48 < 0 ||
                     item.giac_d60 < 0 ||
-                    item.giac_d81 < 0
+                    item.giac_d80 < 0 ||
+                    item.giac_d81 < 0 ||
+                    item.giac_d81_legami < 0
                 );
             }
             if (showUnderScortaOnly) {
@@ -2306,7 +2499,9 @@ const customerOrdersColumns = [
             "Dep. 40": item.giac_d40,
             "Dep. 48": item.giac_d48,
             "Dep. 60": item.giac_d60,
+            "Dep. 80": item.giac_d80,
             "Dep. 81": item.giac_d81,
+            "Dep. 81 distinta": item.giac_d81_legami,
             "Disponibilità m corr.": calculateAvailability(item, "mc"),
             "Disponibilità m succ.": calculateAvailability(item, "ms"),
             "Disponibilità 2m succ.": calculateAvailability(item, "msa"),
@@ -3115,7 +3310,7 @@ const customerOrdersColumns = [
             }
             // For numeric fields in placeholders, show dash instead of zero
             if (['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 
-                 'giac_d60', 'giac_d81', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
+                 'giac_d60', 'giac_d80', 'giac_d81', 'giac_d81_legami', 'dom_mc', 'dom_ms', 'dom_msa', 'dom_mss',
                  'off_mc', 'off_ms', 'off_msa', 'off_mss'].includes(col.dataIndex)) {
                 return {
                     ...col,
@@ -3552,6 +3747,7 @@ const customerOrdersColumns = [
                             y: 750, // Adjust based on your layout needs
                         }}
                         virtual
+                        onChange={handleTableChange}
                         onRow={(record, rowIndex) => {
                             return {
                                 onContextMenu: (event) => handleContextMenu(event, record), // Attach context menu handler
