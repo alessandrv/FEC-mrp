@@ -1459,6 +1459,7 @@ const customerOrdersColumns = [
                 }
                 return true; // For "all", include all rows
             },
+            filteredValue: tableFilters.disponibilita_m_corr || null,
             render: (_, record) => {
                 const value = calculateAvailability(record, "mc");
                 const cellClass = getAvailabilityCellClass(value, record.scrt);
@@ -1542,6 +1543,7 @@ const customerOrdersColumns = [
                 }
                 return true; // For "all", include all rows
             },
+            filteredValue: tableFilters.disponibilita_m_succ || null,
             render: (_, record) => {
                 const value = calculateAvailability(record, "ms");
                 const cellClass = getAvailabilityCellClass(value, record.scrt);
@@ -1626,6 +1628,7 @@ const customerOrdersColumns = [
                 }
                 return true; // For "all", include all rows
             },
+            filteredValue: tableFilters.disponibilita_2m_succ || null,
             render: (_, record) => {
                 const value = calculateAvailability(record, "msa");
                 const cellClass = getAvailabilityCellClass(value, record.scrt);
@@ -1710,6 +1713,7 @@ const customerOrdersColumns = [
                 }
                 return true; // For "all", include all rows
             },
+            filteredValue: tableFilters.disponibilita_3m_succ || null,
             render: (_, record) => {
                 const value = calculateAvailability(record, "mss");
                 const cellClass = getAvailabilityCellClass(value, record.scrt);
