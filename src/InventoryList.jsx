@@ -1981,11 +1981,9 @@ const customerOrdersColumns = [
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno m corr.">
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
                             <>
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </>
                         }
                     </div>
@@ -2052,11 +2050,9 @@ const customerOrdersColumns = [
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno m succ.">
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
                             <>
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </>
                         }
 
@@ -2124,11 +2120,9 @@ const customerOrdersColumns = [
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno 2m succ.">
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
                             <>
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </>
                         }                    </div>
                 );
@@ -2194,11 +2188,9 @@ const customerOrdersColumns = [
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno 3m+ succ.">
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
                             <>
                                 {text}
-                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </>
                         }                    </div>
                 );
