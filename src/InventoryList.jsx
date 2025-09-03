@@ -238,10 +238,15 @@ const ArticlesTable = () => {
             dom_ms: parseInt(item.dom_ms) || 0,
             dom_msa: parseInt(item.dom_msa) || 0,
             dom_mss: parseInt(item.dom_mss) || 0,
+            domanda_mc: parseInt(item.domanda_mc) || 0,
+            domanda_ms: parseInt(item.domanda_ms) || 0,
+            domanda_msa: parseInt(item.domanda_msa) || 0,
+            domanda_mss: parseInt(item.domanda_mss) || 0,
             off_mc: parseInt(item.off_mc) || 0,
             off_ms: parseInt(item.off_ms) || 0,
             off_msa: parseInt(item.off_msa) || 0,
             off_mss: parseInt(item.off_mss) || 0,
+            last_purchase: item.last_purchase ? item.last_purchase : null,
         }));
     };
     const handleContextMenu = (event, record) => {
@@ -1967,13 +1972,21 @@ const customerOrdersColumns = [
             },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_mc");
+                const domandaValue = record.domanda_mc || 0;
+                const domValue = record.dom_mc || 0;
+                const showDomandaInParentheses = domandaValue !== domValue;
+                
                 return (
                     <div className={shouldHighlight ? "highlighted-cell" : ""}>
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno m corr.">
                                 {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
-                            text
+                            <>
+                                {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
+                            </>
                         }
                     </div>
                 );
@@ -2030,13 +2043,21 @@ const customerOrdersColumns = [
             },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_ms");
+                const domandaValue = record.domanda_ms || 0;
+                const domValue = record.dom_ms || 0;
+                const showDomandaInParentheses = domandaValue !== domValue;
+                
                 return (
                     <div className={shouldHighlight ? "highlighted-cell" : ""}>
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno m succ.">
                                 {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
-                            text
+                            <>
+                                {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
+                            </>
                         }
 
                     </div>
@@ -2094,13 +2115,21 @@ const customerOrdersColumns = [
             },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_msa");
+                const domandaValue = record.domanda_msa || 0; // Fixed: now using domanda_msa
+                const domValue = record.dom_msa || 0;
+                const showDomandaInParentheses = domandaValue !== domValue;
+                
                 return (
                     <div className={shouldHighlight ? "highlighted-cell" : ""}>
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno 2m succ.">
                                 {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
-                            text
+                            <>
+                                {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
+                            </>
                         }                    </div>
                 );
             },
@@ -2156,13 +2185,21 @@ const customerOrdersColumns = [
             },
             render: (text, record) => {
                 const shouldHighlight = (hoveredRowKey === record.c_articolo) && highlightedColumns.includes("dom_mss");
+                const domandaValue = record.domanda_mss || 0;
+                const domValue = record.dom_mss || 0;
+                const showDomandaInParentheses = domandaValue !== domValue;
+                
                 return (
                     <div className={shouldHighlight ? "highlighted-cell" : ""}>
                         {shouldHighlight ?
                             <AntTooltip defaultOpen={true} title="Impegno 3m+ succ.">
                                 {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
                             </AntTooltip> :
-                            text
+                            <>
+                                {text}
+                                {showDomandaInParentheses && <span style={{fontSize: '0.8em', color: '#666'}}> ({domandaValue})</span>}
+                            </>
                         }                    </div>
                 );
             },
@@ -2418,12 +2455,21 @@ const customerOrdersColumns = [
                 );
             },
         },
+         {
+            title: "Ultimo acquisto",
+            dataIndex: "last_purchase",
+            key: "last_purchase",
+            width: 120,
+            render: (text) => (text ? String(text).slice(0, 10) : ""),
+        },
     ];
     const columnsToCheck = [
         "ord_mpp", "ord_mp", "ord_mc",
         "dom_mc", "dom_ms", "dom_msa", "dom_mss",
-        "off_mc", "off_ms", "off_msa", "off_mss",
-        "giac_d01", "giac_d20", "giac_d32", "giac_d40", "giac_d48", "giac_d60", "giac_d80", "giac_d81", "giac_d81_legami"
+        "domanda_mc", "domanda_ms", "domanda_msa", "domanda_mss",
+        "off_mc", "off_ms", "off_msa", "off_mss", 
+        "giac_d01", "giac_d20", "giac_d32", "giac_d40", "giac_d48", "giac_d60", "giac_d80", "giac_d81", 
+        "giac_d81_legami", "last_purchase"
     ];
 
     const filteredData = data
@@ -2515,13 +2561,18 @@ const customerOrdersColumns = [
             "Ordine m prec.": item.ord_mp,
             "Ordine m corr.": item.ord_mc,
             "Impegno m corr.": item.dom_mc,
+            "Domanda m corr.": item.domanda_mc,
             "Impegno m succ.": item.dom_ms,
+            "Domanda m succ.": item.domanda_ms,
             "Impegno 2m succ.": item.dom_msa,
+            "Domanda 2m succ.": item.domanda_msa,
             "Impegno 3m+ succ.": item.dom_mss,
+            "Domanda 3m+ succ.": item.domanda_mss,
             "Atteso m corr.": item.off_mc,
             "Atteso m succ.": item.off_ms,
             "Atteso 2m succ.": item.off_msa,
             "Atteso 3m+ succ.": item.off_mss,
+            "Ultimo acquisto": item.last_purchase ? String(item.last_purchase).slice(0, 10) : "",
         }));
 
         // Create a worksheet from the data

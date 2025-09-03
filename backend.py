@@ -386,7 +386,76 @@ nvl((select sum(mol_quaor-mol_quari) from mpordil where mol_parte = amg_code and
 nvl((select sum(ofc_qord-ofc_qcon) from ofordic where ofc_arti = amg_code and ofc_feva = 'N'
   and ofc_dtco >= last_day(add_months(today,2))+1),0) +
 nvl((select sum(mol_quaor-mol_quari) from mpordil where mol_parte = amg_code and mol_stato in ('A')
-  and mol_dats >= last_day(add_months(today,2))+1),0) off_mss
+  and mol_dats >= last_day(add_months(today,2))+1),0) off_mss,
+-- New domanda logic based on ocordic/ocordit with active orders (oct_stat = 'A')
+-- Includes both direct demand and indirect demand from parent articles
+nvl((
+  -- Direct demand for the main article (current month)
+  select sum(occ_qmov) from ocordic oc
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where oc.occ_arti = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco <= last_day(today)
+),0) +
+nvl((
+  -- Indirect demand from parent articles (current month)
+  select sum(occ_qmov * mpl.mpl_coimp) from mplegami mpl
+  inner join ocordic oc on oc.occ_arti = mpl.mpl_padre
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where mpl.mpl_figlio = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco <= last_day(today)
+),0) domanda_mc,
+nvl((
+  -- Direct demand for the main article (next month)
+  select sum(occ_qmov) from ocordic oc
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where oc.occ_arti = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))
+),0) +
+nvl((
+  -- Indirect demand from parent articles (next month)
+  select sum(occ_qmov * mpl.mpl_coimp) from mplegami mpl
+  inner join ocordic oc on oc.occ_arti = mpl.mpl_padre
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where mpl.mpl_figlio = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco between last_day(add_months(today,0))+1 and last_day(add_months(today,+1))
+),0) domanda_ms,
+nvl((
+  -- Direct demand for the main article (2 months successor)
+  select sum(occ_qmov) from ocordic oc
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where oc.occ_arti = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))
+),0) +
+nvl((
+  -- Indirect demand from parent articles (2 months successor)
+  select sum(occ_qmov * mpl.mpl_coimp) from mplegami mpl
+  inner join ocordic oc on oc.occ_arti = mpl.mpl_padre
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where mpl.mpl_figlio = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco between last_day(add_months(today,+1))+1 and last_day(add_months(today,+2))
+),0) domanda_msa,
+nvl((
+  -- Direct demand for the main article (3+ months successor)
+  select sum(occ_qmov) from ocordic oc
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where oc.occ_arti = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco >= last_day(add_months(today,+2))+1
+),0) +
+nvl((
+  -- Indirect demand from parent articles (3+ months successor)
+  select sum(occ_qmov * mpl.mpl_coimp) from mplegami mpl
+  inner join ocordic oc on oc.occ_arti = mpl.mpl_padre
+  inner join ocordit ot on oc.occ_tipo = ot.oct_tipo and oc.occ_code = ot.oct_code
+  where mpl.mpl_figlio = amg_code and ot.oct_stat = 'A' and oc.occ_feva = "N"
+  and oc.occ_dtco >= last_day(add_months(today,+2))+1
+),0) domanda_mss,
+-- Last purchase date from supplier orders (excluding type 'O')
+( select max(oft.oft_data)
+  from ofordic ofc
+  join ofordit oft on ofc.ofc_tipo = oft.oft_tipo and ofc.ofc_code = oft.oft_code
+  where ofc.ofc_arti = amg_code
+    and ofc.ofc_tipo != 'O'
+) last_purchase
 from mganag, mppoli
 where amg_code = amp_code and amp_depo = 1
 and  amg_stat = 'D' 
