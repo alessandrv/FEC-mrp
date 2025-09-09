@@ -2451,7 +2451,17 @@ const customerOrdersColumns = [
             title: "Ultimo acquisto",
             dataIndex: "last_purchase",
             key: "last_purchase",
-            width: 120,
+            width: 140,
+            sorter: (a, b) => {
+                // Handle null/undefined/empty values placing them at the bottom when descending
+                if (!a.last_purchase && !b.last_purchase) return 0;
+                if (!a.last_purchase) return -1; // a comes first in ascending
+                if (!b.last_purchase) return 1;  // b comes first in ascending
+                const da = new Date(a.last_purchase);
+                const db = new Date(b.last_purchase);
+                return da - db;
+            },
+            sortDirections: ['descend', 'ascend'],
             render: (text) => (text ? String(text).slice(0, 10) : ""),
         },
     ];
