@@ -4,7 +4,7 @@ import sys
 import uvicorn
 
 def main():
-    host = os.getenv("BACKEND_HOST", "localhost")
+    host = os.getenv("BACKEND_HOST", "172.16.16.27")
     port = int(os.getenv("BACKEND_PORT", "8000"))
     reload_enabled = os.getenv("BACKEND_RELOAD", "false").lower() in ("1", "true", "yes", "on")
     workers = int(os.getenv("BACKEND_WORKERS", "1"))
