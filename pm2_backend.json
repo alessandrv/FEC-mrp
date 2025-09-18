@@ -2,7 +2,7 @@
     "apps": [
         {
             "name": "report-disponibilita-backend",
-            "script": "server.py",
+            "script": "main.py",
             "interpreter": "c:\\Users\\Fecadm\\AppData\\Local\\Programs\\Python\\Python312-32\\python.exe",
             "exec_mode": "fork",
             "watch": false
