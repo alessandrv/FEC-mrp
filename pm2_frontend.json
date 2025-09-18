@@ -1,0 +1,11 @@
+{
+    "apps": [
+        {
+            "name": "report-disponibilita-frontend",
+            "script": "serve",
+            "args": ["build/", "3000"],
+            "exec_mode": "fork",
+            "watch": false
+        }
+    ]
+}
