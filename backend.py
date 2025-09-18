@@ -22,18 +22,21 @@ import products_availability_crud
 
 app = FastAPI()
 
-# Add products availability CRUD router
-app.include_router(products_availability_crud.router)
+origins = [
+    "http://172.16.16.27:3000",
+    "http://localhost:3000",
+]
+extra = os.getenv("BACKEND_CORS_ORIGINS")
+if extra:
+    origins.extend([o.strip() for o in extra.split(",") if o.strip()])
 
-# Configure CORS settings
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(dict.fromkeys(origins)),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 # Database connection configuration
 DB_CONFIG = {
     'DSN': os.getenv('DB_DSN', 'fec'),
