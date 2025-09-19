@@ -1890,7 +1890,7 @@ async def get_article_disponibilita(article_code: str):
 
 
 
-@app.get("/get_disponibilita_articolis")
+@app.get("/get_disponibilita_articoli")
 async def get_article_disponibilita():
     """
     Retrieves the availability data for a specific article code.
