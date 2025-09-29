@@ -1935,7 +1935,7 @@ async def get_article_disponibilita():
 
 
 @app.get("/get_disponibilita_articoli_commerciali")
-async def get_disponibilita_articoli_commericali(current_user: TokenData = Depends(get_current_user)):
+async def get_disponibilita_articoli_commericali():
     """
     Retrieves the availability data for all article codes.
     Protected by token authentication.
