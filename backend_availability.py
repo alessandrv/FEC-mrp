@@ -327,7 +327,7 @@ async def get_disponibilita_articoli(current_user: TokenData = Depends(get_curre
             cursor.close()
 
 @app.get("/get_disponibilita_articoli")
-async def get_disponibilita_articoli(current_user: TokenData = Depends(get_current_user)):
+async def get_disponibilita_articoli_commericali(current_user: TokenData = Depends(get_current_user)):
     """
     Retrieves the availability data for all article codes.
     Protected by token authentication.

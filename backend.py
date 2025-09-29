@@ -1933,6 +1933,51 @@ async def get_article_disponibilita():
         if cursor is not None:
             cursor.close()
 
+
+@app.get("/get_disponibilita_articoli_commerciali")
+async def get_disponibilita_articoli_commericali(current_user: TokenData = Depends(get_current_user)):
+    """
+    Retrieves the availability data for all article codes.
+    Protected by token authentication.
+    """
+    start_time = time.time()
+    cursor = None  # Initialize cursor to None
+    try:
+        conn = get_cached_connection()
+        cursor = conn.cursor()
+        
+        # Prepare the query
+        query = '''select * from products_availability where is_hub = 0'''
+        
+        # Execute the query with the article code parameter
+        cursor.execute(query,)        
+        # Fetch all results
+        rows = cursor.fetchall()
+        
+        # Check if any rows were returned
+        if not rows:
+            return JSONResponse(
+                content={"message": "Article not found."},
+                status_code=404
+            )
+        
+        # Convert the results to a list of dictionaries
+        columns = [column[0] for column in cursor.description]
+        results = [dict(zip(columns, row)) for row in rows]
+        
+        total_time = time.time() - start_time
+        print(f"Total execution time: {total_time} seconds")
+        
+        # Return the results as JSON
+        return JSONResponse(content=jsonable_encoder(results))
+        
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+    finally:
+        if cursor is not None:
+            cursor.close()
+
 @app.post("/simulate_order")
 async def simulate_order(request: Request):
     """
