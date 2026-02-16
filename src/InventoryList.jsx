@@ -1331,6 +1331,7 @@ const customerOrdersColumns = [
                 <FilterOutlined style={{ color: filtered ? '#1677ff' : undefined }} />
             ),
             onFilter: (value, record) => record.fornitore === value,
+            filteredValue: tableFilters.fornitore || null,
         },
         {
             title: "LT", // Customize for another field
