@@ -108,6 +108,8 @@ const ArticlesTable = () => {
     const [showNegativeOnly, setShowNegativeOnly] = useState(false);
     const [showUnderScortaOnly, setShowUnderScortaOnly] = useState(false);
     const [searchText, setSearchText] = useState("");
+    const [quickFilterType, setQuickFilterType] = useState("none");
+    const [quickFilterPeriod, setQuickFilterPeriod] = useState("all");
 
     // Add these new state variables at the beginning of the component
     const [isSimulationModalVisible, setIsSimulationModalVisible] = useState(false);
@@ -475,6 +477,8 @@ const ArticlesTable = () => {
         // Clear other filters
         setShowNegativeOnly(false);
         setShowUnderScortaOnly(false);
+        setQuickFilterType("none");
+        setQuickFilterPeriod("all");
         
         // Set the table filters to filter by this specific article
         setTableFilters({
@@ -513,6 +517,8 @@ const ArticlesTable = () => {
         setSelectedGroup(null);
         setShowNegativeOnly(false);
         setShowUnderScortaOnly(false);
+        setQuickFilterType("none");
+        setQuickFilterPeriod("all");
         message.success("Tutti i filtri sono stati rimossi");
     };
     
@@ -1011,6 +1017,66 @@ const customerOrdersColumns = [
             return secondMonthAvailability - (record.dom_mss || 0) + (record.off_mss || 0);
         }
         return 0; // Default for undefined month parameter
+    };
+
+    const quickFilterMonthConfig = {
+        mc: { label: "m corr.", impegniKey: "dom_mc", ordineKey: "off_mc" },
+        ms: { label: "m succ.", impegniKey: "dom_ms", ordineKey: "off_ms" },
+        msa: { label: "2m succ.", impegniKey: "dom_msa", ordineKey: "off_msa" },
+        mss: { label: "3m+ succ.", impegniKey: "dom_mss", ordineKey: "off_mss" },
+    };
+
+    const getQuickFilterPeriodsToCheck = () => (
+        quickFilterPeriod === "all"
+            ? Object.keys(quickFilterMonthConfig)
+            : [quickFilterPeriod]
+    );
+
+    const hasImpegniAndNoOrdine = (item, period) => {
+        const monthConfig = quickFilterMonthConfig[period];
+        if (!monthConfig) return false;
+
+        const impegni = item[monthConfig.impegniKey] || 0;
+        const ordine = item[monthConfig.ordineKey] || 0;
+        return impegni > 0 && ordine === 0;
+    };
+
+    const hasAttesoZeroInAllMonths = (item) => {
+        const allPeriods = Object.keys(quickFilterMonthConfig);
+        return allPeriods.every((period) => {
+            const monthConfig = quickFilterMonthConfig[period];
+            return (item[monthConfig.ordineKey] || 0) === 0;
+        });
+    };
+
+    const hasImpegniPositiveInPeriods = (item, periods) => (
+        periods.some((period) => {
+            const monthConfig = quickFilterMonthConfig[period];
+            if (!monthConfig) return false;
+            return (item[monthConfig.impegniKey] || 0) > 0;
+        })
+    );
+
+    const isUnderScortaAndRed = (item, period) => {
+        const availability = calculateAvailability(item, period);
+        const scorta = item.scrt || 0;
+        return availability < scorta && availability < 0;
+    };
+
+    const getQuickFilterLabel = () => {
+        const periodLabel = quickFilterPeriod === "all"
+            ? "Tutti i mesi"
+            : (quickFilterMonthConfig[quickFilterPeriod]?.label || quickFilterPeriod);
+
+        if (quickFilterType === "impegniNoOrdine") {
+            return `Impegni > 0 e nessun atteso (${periodLabel})`;
+        }
+
+        if (quickFilterType === "impegniNoOrdineUnderScortaRed") {
+            return `Impegni > 0, nessun ordine, sotto scorta e rosso (${periodLabel})`;
+        }
+
+        return "Nessuno";
     };
 
 
@@ -2504,6 +2570,36 @@ const customerOrdersColumns = [
             return true;
         })
         .filter(item => {
+            if (quickFilterType === "none") {
+                return true;
+            }
+
+            const periodsToCheck = getQuickFilterPeriodsToCheck();
+            const allPeriods = Object.keys(quickFilterMonthConfig);
+
+            if (quickFilterType === "impegniNoOrdine") {
+                if (quickFilterPeriod === "all") {
+                    return hasAttesoZeroInAllMonths(item) && hasImpegniPositiveInPeriods(item, allPeriods);
+                }
+                return periodsToCheck.some(period => hasImpegniAndNoOrdine(item, period));
+            }
+
+            if (quickFilterType === "impegniNoOrdineUnderScortaRed") {
+                if (quickFilterPeriod === "all") {
+                    return hasAttesoZeroInAllMonths(item) && allPeriods.some(period => (
+                        hasImpegniAndNoOrdine(item, period) &&
+                        isUnderScortaAndRed(item, period)
+                    ));
+                }
+                return periodsToCheck.some(period => (
+                    hasImpegniAndNoOrdine(item, period) &&
+                    isUnderScortaAndRed(item, period)
+                ));
+            }
+
+            return true;
+        })
+        .filter(item => {
             // Filter by negative or under scorta
             if (showNegativeOnly) {
                 return (
@@ -3207,6 +3303,37 @@ const customerOrdersColumns = [
             <Menu.Item key="columnSelector" onClick={() => setIsColumnSelectorVisible(true)}>
                 Seleziona Colonne
             </Menu.Item>
+            <Menu.SubMenu key="quickFilters" title="Filtro rapido">
+                <Menu.Item key="quickFilterPeriodSelector" disabled>
+                    <div onClick={(e) => e.stopPropagation()} style={{ minWidth: 220 }}>
+                        <Typography.Text strong style={{ display: "block", marginBottom: 6 }}>
+                            Periodo
+                        </Typography.Text>
+                        <Select
+                            size="small"
+                            value={quickFilterPeriod}
+                            style={{ width: "100%" }}
+                            onChange={(value) => setQuickFilterPeriod(value)}
+                            options={[
+                                { value: "all", label: "Tutti i mesi" },
+                                { value: "mc", label: "Mese corrente" },
+                                { value: "ms", label: "Mese successivo" },
+                                { value: "msa", label: "2 mesi successivi" },
+                                { value: "mss", label: "3+ mesi successivi" },
+                            ]}
+                        />
+                    </div>
+                </Menu.Item>
+                <Menu.Item key="quickFilterImpegniNoOrdine" onClick={() => setQuickFilterType("impegniNoOrdine")}>
+                    {quickFilterType === "impegniNoOrdine" ? <CheckOutlined style={{ color: "#1677ff" }} /> : null} Impegni &gt; 0 e nessun ordine
+                </Menu.Item>
+                <Menu.Item key="quickFilterUnderScortaRed" onClick={() => setQuickFilterType("impegniNoOrdineUnderScortaRed")}>
+                    {quickFilterType === "impegniNoOrdineUnderScortaRed" ? <CheckOutlined style={{ color: "#1677ff" }} /> : null} Impegni &gt; 0 + sotto scorta + rosso
+                </Menu.Item>
+                <Menu.Item key="quickFilterReset" onClick={() => setQuickFilterType("none")}>
+                    Reset quick filter
+                </Menu.Item>
+            </Menu.SubMenu>
             <Menu.Divider />
             <Menu.Item key="toggleZeroRows">
                 <Checkbox 
@@ -3779,6 +3906,15 @@ const customerOrdersColumns = [
                                         message.info('Filtro gruppo disattivato');
                                     }} 
                                     style={{ marginLeft: 8, cursor: 'pointer' }}
+                                />
+                            </Tag>
+                        )}
+                        {quickFilterType !== "none" && (
+                            <Tag color="purple" style={{ marginRight: 8 }}>
+                                Quick filter: {getQuickFilterLabel()}
+                                <CloseOutlined
+                                    onClick={() => setQuickFilterType("none")}
+                                    style={{ marginLeft: 8, cursor: "pointer" }}
                                 />
                             </Tag>
                         )}
