@@ -152,6 +152,7 @@ const ArticlesTable = () => {
     
     // Add state for table column filters
     const [tableFilters, setTableFilters] = useState({});
+    const [currentTableViewData, setCurrentTableViewData] = useState([]);
 
     // Add this utility function to convert wildcard pattern to regex
     const wildcardToRegex = (pattern) => {
@@ -504,6 +505,9 @@ const ArticlesTable = () => {
     const handleTableChange = (pagination, filters, sorter, extra) => {
         // Update the table filters state when filters change
         setTableFilters(filters);
+        if (extra?.currentDataSource) {
+            setCurrentTableViewData(extra.currentDataSource);
+        }
     };
     
     const clearAllFilters = () => {
@@ -511,6 +515,7 @@ const ArticlesTable = () => {
         setTableFilters({
             a_p: ["A"] // Reset AP filter to default "A" only
         });
+        setCurrentTableViewData([]);
         setSearchText("");
         setIsFilteringByGroup(false);
         setGroupArticleCodes([]);
@@ -2635,8 +2640,10 @@ const customerOrdersColumns = [
     }, [contextMenuVisible]);
 
     const exportExcel = () => {
+        const exportSource = currentTableViewData.length > 0 ? currentTableViewData : filteredData;
+
         // Define the columns to include in the export
-        const exportData = data.map((item) => ({
+        const exportData = exportSource.map((item) => ({
             "Articolo": item.c_articolo,
             "AP": item.a_p,
             "Descrizione": item.d_articolo,
