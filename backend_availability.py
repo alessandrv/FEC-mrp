@@ -775,13 +775,145 @@ async def get_articles_commerciali(current_user: TokenData = Depends(get_current
         
         availability_query = f"""
         select TRIM(amg_code) c_articolo, amg_dest d_articolo,
-(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 1) giac_d01,
-(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 20) giac_d20,
-(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 32) giac_d32,
-(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 40) giac_d40,
-(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 48) giac_d48,
-(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 60) giac_d60,
-(select round(dep_qgiai+dep_qcar-dep_qsca,0) from mgdepo where dep_arti = amg_code and dep_code = 81) giac_d81,
+(select round(dep_qgiai+dep_qcar-dep_qsca,0)
+ from mgdepo
+ where dep_arti = amg_code and dep_code = 1)
+-
+( nvl((select sum(occ_qmov-occ_qcon)
+       from ocordic, ocordit
+       where occ_arti = amg_code
+         and oct_stat != 'O'
+         and occ_tipo = oct_tipo
+         and occ_code = oct_code
+         and occ_feva = 'N'
+         and occ_dtco <= last_day(today)),0)
+  +
+  nvl((select sum(mpf_qfab-mpf_qpre)
+       from mpfabbi
+       where mpf_arti = amg_code
+         and mpf_feva = 'N'
+         and mpf_dfab <= last_day(today)),0)
+) giac_d01,
+
+(select round(dep_qgiai+dep_qcar-dep_qsca,0)
+ from mgdepo
+ where dep_arti = amg_code and dep_code = 20)
+-
+( nvl((select sum(occ_qmov-occ_qcon)
+       from ocordic, ocordit
+       where occ_arti = amg_code
+         and oct_stat != 'O'
+         and occ_tipo = oct_tipo
+         and occ_code = oct_code
+         and occ_feva = 'N'
+         and occ_dtco <= last_day(today)),0)
+  +
+  nvl((select sum(mpf_qfab-mpf_qpre)
+       from mpfabbi
+       where mpf_arti = amg_code
+         and mpf_feva = 'N'
+         and mpf_dfab <= last_day(today)),0)
+) giac_d20,
+
+(select round(dep_qgiai+dep_qcar-dep_qsca,0)
+ from mgdepo
+ where dep_arti = amg_code and dep_code = 32)
+-
+( nvl((select sum(occ_qmov-occ_qcon)
+       from ocordic, ocordit
+       where occ_arti = amg_code
+         and oct_stat != 'O'
+         and occ_tipo = oct_tipo
+         and occ_code = oct_code
+         and occ_feva = 'N'
+         and occ_dtco <= last_day(today)),0)
+  +
+  nvl((select sum(mpf_qfab-mpf_qpre)
+       from mpfabbi
+       where mpf_arti = amg_code
+         and mpf_feva = 'N'
+         and mpf_dfab <= last_day(today)),0)
+) giac_d32,
+
+(select round(dep_qgiai+dep_qcar-dep_qsca,0)
+ from mgdepo
+ where dep_arti = amg_code and dep_code = 40)
+-
+( nvl((select sum(occ_qmov-occ_qcon)
+       from ocordic, ocordit
+       where occ_arti = amg_code
+         and oct_stat != 'O'
+         and occ_tipo = oct_tipo
+         and occ_code = oct_code
+         and occ_feva = 'N'
+         and occ_dtco <= last_day(today)),0)
+  +
+  nvl((select sum(mpf_qfab-mpf_qpre)
+       from mpfabbi
+       where mpf_arti = amg_code
+         and mpf_feva = 'N'
+         and mpf_dfab <= last_day(today)),0)
+) giac_d40,
+
+(select round(dep_qgiai+dep_qcar-dep_qsca,0)
+ from mgdepo
+ where dep_arti = amg_code and dep_code = 48)
+-
+( nvl((select sum(occ_qmov-occ_qcon)
+       from ocordic, ocordit
+       where occ_arti = amg_code
+         and oct_stat != 'O'
+         and occ_tipo = oct_tipo
+         and occ_code = oct_code
+         and occ_feva = 'N'
+         and occ_dtco <= last_day(today)),0)
+  +
+  nvl((select sum(mpf_qfab-mpf_qpre)
+       from mpfabbi
+       where mpf_arti = amg_code
+         and mpf_feva = 'N'
+         and mpf_dfab <= last_day(today)),0)
+) giac_d48,
+
+(select round(dep_qgiai+dep_qcar-dep_qsca,0)
+ from mgdepo
+ where dep_arti = amg_code and dep_code = 60)
+-
+( nvl((select sum(occ_qmov-occ_qcon)
+       from ocordic, ocordit
+       where occ_arti = amg_code
+         and oct_stat != 'O'
+         and occ_tipo = oct_tipo
+         and occ_code = oct_code
+         and occ_feva = 'N'
+         and occ_dtco <= last_day(today)),0)
+  +
+  nvl((select sum(mpf_qfab-mpf_qpre)
+       from mpfabbi
+       where mpf_arti = amg_code
+         and mpf_feva = 'N'
+         and mpf_dfab <= last_day(today)),0)
+) giac_d60,
+
+(select round(dep_qgiai+dep_qcar-dep_qsca,0)
+ from mgdepo
+ where dep_arti = amg_code and dep_code = 81)
+-
+( nvl((select sum(occ_qmov-occ_qcon)
+       from ocordic, ocordit
+       where occ_arti = amg_code
+         and oct_stat != 'O'
+         and occ_tipo = oct_tipo
+         and occ_code = oct_code
+         and occ_feva = 'N'
+         and occ_dtco <= last_day(today)),0)
+  +
+  nvl((select sum(mpf_qfab-mpf_qpre)
+       from mpfabbi
+       where mpf_arti = amg_code
+         and mpf_feva = 'N'
+         and mpf_dfab <= last_day(today)),0)
+) giac_d81,
 (select round(dep_qgiai+dep_qcar-dep_qsca+dep_qord+dep_qorp-dep_qpre-dep_qprp,0) from mgdepo 
   where dep_arti = amg_code and dep_code = 1) 
 - (select NVL(sum(mpf_qfab), 0) from mpfabbi, mpordil where mpf_ordl = mol_code and mpf_feva = 'N' and mol_stato = 'P'
