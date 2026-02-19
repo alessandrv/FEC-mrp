@@ -33,13 +33,13 @@ async def run_both_apps():
     # Create tasks for both apps
     backend_runner = AppRunner(
         "backend:app", 
-        host="172.16.16.119", 
+        host="172.16.16.27", 
         port=8000
     )
     
     availability_runner = AppRunner(
         "backend_availability:app", 
-        host="172.16.16.119", 
+        host="172.16.16.27", 
         port=8001
     )
 
