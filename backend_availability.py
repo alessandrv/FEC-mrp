@@ -624,6 +624,11 @@ and nvl(amg_fagi,'S') = 'S'
                         combined_item[field] = 0
                     combined_data.append(combined_item)
         
+        # Use real-time descriptions from mganag where available
+        for item in combined_data:
+            if item.get('d_articolo'):
+                item['descrizione'] = item['d_articolo']
+
         # Make sure all numeric fields are properly initialized and convert Decimal to float
         for article in combined_data:
             for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
@@ -1080,6 +1085,11 @@ and nvl(amg_fagi,'S') = 'S'
                         combined_item[field] = 0
                     combined_data.append(combined_item)
         
+        # Use real-time descriptions from mganag where available
+        for item in combined_data:
+            if item.get('d_articolo'):
+                item['descrizione'] = item['d_articolo']
+
         # Make sure all numeric fields are properly initialized and convert Decimal to float
         for article in combined_data:
             for field in ['giac_d01', 'giac_d20', 'giac_d32', 'giac_d40', 'giac_d48', 'giac_d60', 'giac_d81',
